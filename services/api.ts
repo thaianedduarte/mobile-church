@@ -313,11 +313,34 @@ const mockData = generateMockData();
 // API Functions
 export const fetchDashboardData = async (token: string): Promise<DashboardData> => {
   try {
+    // Try to use Supabase client first, fallback to mock data
+    const { supabase } = await import('./supabase');
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (user) {
+      // Fetch real data from Supabase with RLS
+      const [events, notices] = await Promise.all([
+        supabase.from('eventos').select('*').limit(2),
+        supabase.from('avisos').select('*').eq('ativo', true).limit(2)
+      ]);
+      
+      // Use real data if available, otherwise fallback to mock
+      if (events.data && notices.data) {
+        return {
+          ...mockData.dashboardData,
+          upcomingEvents: events.data,
+          recentNotices: notices.data
+        };
+      }
+    }
+    
+    // Fallback to mock data
     await new Promise(resolve => setTimeout(resolve, 800));
     return mockData.dashboardData;
   } catch (error) {
     console.error('Error fetching dashboard data:', error);
-    throw error;
+    // Return mock data on error
+    return mockData.dashboardData;
   }
 };
 

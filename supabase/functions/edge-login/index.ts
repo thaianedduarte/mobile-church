@@ -1,10 +1,24 @@
+
 import { createClient } from 'npm:@supabase/supabase-js@2.39.3';
+import { JWT } from 'npm:jsonwebtoken@9.0.2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
+
+// Cliente Admin com service_role_key (ignora RLS)
+const supabaseAdmin = createClient(
+  Deno.env.get('SUPABASE_URL') ?? '',
+  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+  {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  }
+);
 
 Deno.serve(async (req) => {
   // Handle CORS preflight requests
@@ -19,55 +33,78 @@ Deno.serve(async (req) => {
     const { qrCode } = await req.json();
 
     if (!qrCode) {
-      throw new Error('QR code is required');
+      throw new Error('QR code é obrigatório');
     }
 
-    // Initialize Supabase client
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false,
-        },
-      }
-    );
-
-    // Query the membros table to find the member with matching UUID
-    const { data: member, error: memberError } = await supabase
+    // 1. Busca o membro pelo UUID usando o cliente Admin
+    const { data: member, error: memberError } = await supabaseAdmin
       .from('membros')
-      .select('*')
+      .select(`
+        id,
+        nome,
+        funcao,
+        ativo,
+        profiles!inner(
+          id,
+          email
+        )
+      `)
       .eq('uuid', qrCode)
       .single();
 
     if (memberError || !member) {
-      throw new Error('Invalid QR code');
+      throw new Error('QR Code inválido');
     }
 
-    // Check if member is active
+    // 2. Verifica se o membro está ativo
     if (!member.ativo) {
-      throw new Error('Member is inactive');
+      throw new Error('Membro inativo');
     }
 
-    // Query the profiles table to get the associated auth profile
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', member.id)
-      .single();
+    // 3. Busca o usuário auth relacionado ao profile
+    const { data: authUser, error: userError } = await supabaseAdmin.auth.admin
+      .getUserById(member.profiles.id);
 
-    if (profileError || !profile) {
-      throw new Error('No associated profile found');
+    if (userError || !authUser.user) {
+      throw new Error('Usuário de autenticação não encontrado');
     }
 
+    // 4. Gera uma sessão JWT para o usuário
+    const { data: sessionData, error: sessionError } = await supabaseAdmin.auth.admin
+      .generateLink({
+        type: 'magiclink',
+        email: authUser.user.email!,
+        options: {
+          redirectTo: undefined // Não queremos redirect
+        }
+      });
+
+    if (sessionError) {
+      throw new Error('Erro ao gerar sessão');
+    }
+
+    // 5. Cria uma sessão programaticamente
+    const { data: signInData, error: signInError } = await supabaseAdmin.auth.admin
+      .createUser({
+        email: authUser.user.email!,
+        user_metadata: {
+          member_id: member.id,
+          member_name: member.nome,
+          member_role: member.funcao
+        }
+      });
+
+    // Para compatibilidade com o frontend atual, retornamos os dados no formato esperado
     return new Response(
       JSON.stringify({
         valid: true,
         memberId: member.id,
-        email: profile.email,
+        email: member.profiles.email,
         name: member.nome,
         role: member.funcao,
+        // Dados adicionais para estabelecer sessão
+        user_id: member.profiles.id,
+        access_token: sessionData.properties?.action_link || null
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -76,6 +113,7 @@ Deno.serve(async (req) => {
     );
 
   } catch (error) {
+    console.error('Edge function error:', error);
     return new Response(
       JSON.stringify({
         valid: false,

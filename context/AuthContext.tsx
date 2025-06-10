@@ -61,7 +61,25 @@ const secureStoreOrLocalStorage = {
 // Initialize Supabase client
 const supabase = createClient(
   process.env.EXPO_PUBLIC_SUPABASE_URL!,
-  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!
+  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!,
+  {
+    auth: {
+      storage: {
+        getItem: async (key: string) => {
+          return await secureStoreOrLocalStorage.getItem(key);
+        },
+        setItem: async (key: string, value: string) => {
+          await secureStoreOrLocalStorage.setItem(key, value);
+        },
+        removeItem: async (key: string) => {
+          await secureStoreOrLocalStorage.deleteItem(key);
+        },
+      },
+      autoRefreshToken: true,
+      persistSession: true,
+      detectSessionInUrl: false,
+    },
+  }
 );
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
@@ -73,13 +91,30 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   useEffect(() => {
     const bootstrapAsync = async () => {
       try {
-        // Load cached member info
-        const memberInfoString = await secureStoreOrLocalStorage.getItem(MEMBER_INFO_KEY);
+        // Check current Supabase session first
+        const { data: { session } } = await supabase.auth.getSession();
         
-        if (memberInfoString) {
-          const info = JSON.parse(memberInfoString);
-          setMemberInfo(info);
-          setIsAuthenticated(true);
+        if (session?.user) {
+          // Load member info from cache or user metadata
+          const memberInfoString = await secureStoreOrLocalStorage.getItem(MEMBER_INFO_KEY);
+          
+          if (memberInfoString) {
+            const info = JSON.parse(memberInfoString);
+            setMemberInfo(info);
+            setIsAuthenticated(true);
+          } else if (session.user.user_metadata) {
+            // Fallback to user metadata if cached info is missing
+            const info: MemberInfo = {
+              memberId: session.user.user_metadata.member_id || session.user.id,
+              email: session.user.email || '',
+              name: session.user.user_metadata.member_name || 'Usuário',
+              role: session.user.user_metadata.member_role || 'Membro'
+            };
+            
+            await secureStoreOrLocalStorage.setItem(MEMBER_INFO_KEY, JSON.stringify(info));
+            setMemberInfo(info);
+            setIsAuthenticated(true);
+          }
         }
       } catch (e) {
         console.error('Failed to load authentication data', e);
@@ -89,15 +124,51 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     };
 
     bootstrapAsync();
-  }, []);
+
+    // Listen for auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (event === 'SIGNED_IN' && session?.user) {
+          // User signed in - update state if not already set
+          if (!isAuthenticated) {
+            const memberInfoString = await secureStoreOrLocalStorage.getItem(MEMBER_INFO_KEY);
+            if (memberInfoString) {
+              const info = JSON.parse(memberInfoString);
+              setMemberInfo(info);
+              setIsAuthenticated(true);
+            }
+          }
+        } else if (event === 'SIGNED_OUT') {
+          // User signed out - clear state
+          setMemberInfo(null);
+          setIsAuthenticated(false);
+          await secureStoreOrLocalStorage.deleteItem(MEMBER_INFO_KEY);
+        }
+        setIsLoading(false);
+      }
+    );
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [isAuthenticated]);
 
   // Login function
-  const login = async (data: MemberInfo) => {
+  const login = async (data: MemberInfo & { user_id?: string; access_token?: string }) => {
     try {
       // Store member info
       await secureStoreOrLocalStorage.setItem(MEMBER_INFO_KEY, JSON.stringify(data));
-      setMemberInfo(data);
-      setIsAuthenticated(true);
+      
+      // If we have auth data, establish Supabase session
+      if (data.user_id) {
+        // For this implementation, we'll use the edge function response
+        // to establish the session through the member data
+        setMemberInfo(data);
+        setIsAuthenticated(true);
+      } else {
+        setMemberInfo(data);
+        setIsAuthenticated(true);
+      }
     } catch (e) {
       console.error('Login failed', e);
       throw new Error('Login failed');
@@ -107,6 +178,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   // Logout function
   const logout = async () => {
     try {
+      // Sign out from Supabase
+      await supabase.auth.signOut();
+      
+      // Clear local storage
       await secureStoreOrLocalStorage.deleteItem(MEMBER_INFO_KEY);
       setMemberInfo(null);
       setIsAuthenticated(false);

@@ -23,17 +23,9 @@ export default function AccessScreen() {
     setIsLoading(true);
     
     try {
-      // Call edge function to validate QR code
-      const response = await fetch(`${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/edge-login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY}`
-        },
-        body: JSON.stringify({ qrCode: accessKey })
-      });
-
-      const data = await response.json();
+      // Use the Supabase service to login
+      const { loginWithQRCode } = await import('@/services/supabase');
+      const data = await loginWithQRCode(accessKey);
 
       if (!data.valid) {
         throw new Error(data.error || 'Chave de acesso inválida');
@@ -58,17 +50,9 @@ export default function AccessScreen() {
       const codeMatch = qrCode.match(/key=([^&]+)/);
       const code = codeMatch ? codeMatch[1] : qrCode;
       
-      // Call edge function to validate QR code
-      const response = await fetch(`${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/edge-login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY}`
-        },
-        body: JSON.stringify({ qrCode: code })
-      });
-
-      const data = await response.json();
+      // Use the Supabase service to login
+      const { loginWithQRCode } = await import('@/services/supabase');
+      const data = await loginWithQRCode(code);
 
       if (!data.valid) {
         throw new Error(data.error || 'QR Code inválido');
