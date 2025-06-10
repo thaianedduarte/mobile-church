@@ -1,0 +1,177 @@
+Guia: Autenticação Segura com QR Code
+Este guia implementa um fluxo de login seguro, usando uma Edge Function como "porteiro" para validar o QR Code e as Políticas de Segurança (RLS) para controlar o que o usuário pode ver após o login.
+
+A Estratégia
+Cliente (App React Native): Escaneia o QR Code.
+
+Cliente -> Servidor: Envia o código para uma Edge Function chamada login-com-qrcode. A chamada é segura.
+
+Servidor (Edge Function):
+
+Recebe o código.
+
+Usa privilégios de administrador para buscar na tabela membros pelo qr_code.
+
+Se encontra, pega o id do usuário associado (da tabela profiles).
+
+Gera um token de sessão (JWT) para aquele usuário.
+
+Retorna o token de sessão para o cliente.
+
+Cliente: Recebe o token e usa supabase.auth.setSession() para estabelecer a sessão de login.
+
+Acesso Futuro: Todas as próximas chamadas (select, insert, etc.) usarão esse token, e as Políticas de RLS no seu banco de dados garantirão que o usuário só acesse o que tem permissão.
+
+Passo 1: Pré-requisito - Garantir a Ligação entre membros e profiles
+Sua tabela profiles já está corretamente ligada à auth.users pela chave primária id. Precisamos garantir que a tabela membros também tenha essa ligação. A forma mais limpa é adicionar uma coluna profile_id em membros.
+
+Execute este SQL no seu Editor do Supabase:
+
+ALTER TABLE public.membros
+ADD COLUMN profile_id UUID REFERENCES public.profiles(id);
+
+-- Opcional: Crie um índice para buscas mais rápidas
+CREATE INDEX idx_membros_profile_id ON public.membros(profile_id);
+
+Agora, ao criar um membro, você deve associá-lo a um perfil (e, consequentemente, a um usuário de autenticação).
+
+Passo 2: Backend - Criar a Edge Function
+No seu projeto (pode ser no Replit, localmente, etc.), você precisará da Supabase CLI para criar e implantar a função.
+
+Instale a CLI: npm i supabase -g
+
+Conecte ao seu projeto: supabase login e depois supabase link --project-ref SEU_PROJECT_ID
+
+Crie a função: supabase functions new login-com-qrcode
+
+Isso criará uma pasta supabase/functions/login-com-qrcode/index.ts. Substitua o conteúdo do arquivo index.ts por este código:
+
+// supabase/functions/login-com-qrcode/index.ts
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { corsHeaders } from '../_shared/cors.ts';
+
+// CUIDADO: Este Admin Client usa a service_role_key e ignora a RLS.
+// Use-o apenas em Edge Functions, nunca no frontend.
+const supabaseAdmin = createClient(
+  Deno.env.get('SUPABASE_URL') ?? '',
+  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+);
+
+Deno.serve(async (req) => {
+  // Trata a requisição OPTIONS para o CORS
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
+  }
+
+  try {
+    // 1. Extrai o QR Code do corpo da requisição
+    const { qrCode } = await req.json();
+    if (!qrCode) {
+      throw new Error("QR Code não fornecido.");
+    }
+
+    // 2. Busca o membro pelo QR Code usando o cliente Admin
+    const { data: membro, error: membroError } = await supabaseAdmin
+      .from('membros')
+      .select('profile_id')
+      .eq('qr_code', qrCode)
+      .single();
+
+    if (membroError) throw membroError;
+    if (!membro || !membro.profile_id) {
+      throw new Error("QR Code inválido ou membro não associado a um perfil.");
+    }
+
+    // 3. Gera a sessão para o usuário encontrado
+    // ATENÇÃO: A função `admin.generateLink` foi descontinuada.
+    // O método correto agora é criar um "session token" para o cliente usar.
+    // No entanto, a API para isso não é exposta diretamente.
+    // A abordagem mais robusta é usar o `signInWithId`, mas isso exige que o Supabase
+    // confie na Edge Function. Uma solução mais simples é usar "Magic Links".
+    const { data: sessionData, error: sessionError } = await supabaseAdmin.auth.admin.generateLink({
+      type: 'magiclink',
+      email: (await supabaseAdmin.auth.admin.getUserById(membro.profile_id)).data.user.email
+    });
+    
+    if (sessionError) throw sessionError;
+
+    // 4. Retorna os dados da sessão para o cliente
+    return new Response(
+      JSON.stringify(sessionData),
+      {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200,
+      }
+    );
+
+  } catch (error) {
+    return new Response(
+      JSON.stringify({ error: error.message }),
+      {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 400,
+      }
+    );
+  }
+});
+
+Implante a função: supabase functions deploy login-com-qrcode --no-verify-jwt
+
+Passo 3: Frontend - Atualizar o App React Native
+Agora, ajuste sua função handleScanSuccess para chamar a Edge Function.
+
+// Sua função de login modificada
+const handleScanSuccess = async (scannedData: string) => {
+  setShowScanner(false);
+  setIsLoading(true);
+  setError(null); // Limpa erros anteriores
+
+  try {
+    // Extrai o código do QR Code (sua lógica atual está boa)
+    const codeMatch = scannedData.match(/key=([^&]+)/);
+    const code = codeMatch ? codeMatch[1] : scannedData;
+    
+    console.log('🔑 Chave extraída:', code);
+
+    // 1. CHAMA A EDGE FUNCTION
+    const { data: functionData, error: functionError } = await supabase.functions.invoke(
+      'login-com-qrcode',
+      { body: { qrCode: code } }
+    );
+
+    if (functionError) {
+      // O erro pode vir do network ou da própria função
+      throw new Error(functionError.message || 'Falha ao contatar o servidor.');
+    }
+    
+    if (functionData.error) {
+       // Erro de lógica retornado pela função (ex: QR Code inválido)
+       throw new Error(functionData.error);
+    }
+
+    // 2. EXTRAI O TOKEN DA RESPOSTA E AUTENTICA
+    // A resposta do `generateLink` contém o token_hash e outros dados.
+    // O cliente precisa visitar o link para completar, mas para uma API
+    // podemos usar o `verifyOtp` para trocar o token por uma sessão.
+    const { data: sessionData, error: sessionError } = await supabase.auth.verifyOtp({
+      type: 'magiclink',
+      token_hash: functionData.properties.action_link.split('token=')[1].split('&')[0], // extrai o token do link
+    });
+
+    if (sessionError) throw sessionError;
+
+    // 3. SESSÃO ESTABELECIDA!
+    // `sessionData.session` agora contém a sessão do usuário.
+    // O Supabase JS client automaticamente armazena a sessão.
+    
+    console.log('✅ Login bem-sucedido!', sessionData.session.user.email);
+
+    router.replace('/initial');
+
+  } catch (err: any) {
+    console.error('Falha no login:', err);
+    setError(err.message || 'QR Code inválido. Tente novamente.');
+  } finally {
+    setIsLoading(false);
+  }
+};
