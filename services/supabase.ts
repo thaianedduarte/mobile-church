@@ -27,10 +27,14 @@ const secureStoreOrLocalStorage = {
   }
 };
 
+// Supabase configuration
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://crevcbopbhjptuedfzfz.supabase.co';
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
+
 // Cliente Supabase configurado
 export const supabase = createClient(
-  process.env.EXPO_PUBLIC_SUPABASE_URL!,
-  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!,
+  supabaseUrl,
+  supabaseAnonKey,
   {
     auth: {
       storage: {
@@ -51,21 +55,33 @@ export const supabase = createClient(
   }
 );
 
-// Função para fazer login via Edge Function
+// Função para fazer login via Edge Function deployada
 export const loginWithQRCode = async (qrCode: string) => {
-  const { data, error } = await supabase.functions.invoke('edge-login', {
-    body: { qrCode }
-  });
+  try {
+    const response = await fetch(`${supabaseUrl}/functions/v1/edge-login`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${supabaseAnonKey}`,
+      },
+      body: JSON.stringify({ qrCode }),
+    });
 
-  if (error) {
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Erro ao fazer login');
+    }
+
+    if (!data.valid) {
+      throw new Error(data.error || 'QR Code inválido');
+    }
+
+    return data;
+  } catch (error) {
+    console.error('Erro no login:', error);
     throw new Error(error.message || 'Erro ao fazer login');
   }
-
-  if (!data.valid) {
-    throw new Error(data.error || 'QR Code inválido');
-  }
-
-  return data;
 };
 
 // Funções para acessar dados com RLS ativo
