@@ -1,0 +1,116 @@
+import { createClient } from '@supabase/supabase-js';
+import { Platform } from 'react-native';
+import * as SecureStore from 'expo-secure-store';
+
+// Storage abstraction (seu código aqui está perfeito)
+const secureStoreOrLocalStorage = {
+  getItem: async (key: string): Promise<string | null> => {
+    if (Platform.OS === 'web') {
+      return localStorage.getItem(key);
+    }
+    return SecureStore.getItemAsync(key);
+  },
+  setItem: async (key: string, value: string): Promise<void> => {
+    if (Platform.OS === 'web') {
+      localStorage.setItem(key, value);
+      return;
+    }
+    return SecureStore.setItemAsync(key, value);
+  },
+  deleteItem: async (key: string): Promise<void> => {
+    if (Platform.OS === 'web') {
+      localStorage.removeItem(key);
+      return;
+    }
+    return SecureStore.deleteItemAsync(key);
+  }
+};
+
+// Supabase configuration
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://crevcbopbhjptuedfzfz.supabase.co';
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
+
+// Cliente Supabase configurado (seu código aqui está perfeito)
+export const supabase = createClient(
+  supabaseUrl,
+  supabaseAnonKey,
+  {
+    auth: {
+      storage: secureStoreOrLocalStorage,
+      autoRefreshToken: true,
+      persistSession: true,
+      detectSessionInUrl: false,
+    },
+  }
+);
+
+// ===================================================================
+// FUNÇÃO DE LOGIN CORRIGIDA
+// ===================================================================
+
+export const loginWithQRCode = async (qrCode: string) => {
+  try {
+    // 1. CHAMA A EDGE FUNCTION (usando o método invoke, que é mais limpo)
+    const { data: functionData, error: functionError } = await supabase.functions.invoke(
+      'login-com-qrcode', // Verifique se o nome da função está correto
+      { body: { qrCode } }
+    );
+    
+    if (functionError) {
+      throw new Error(functionError.message || 'Falha ao contatar o servidor de login.');
+    }
+
+    if (functionData.error) {
+      throw new Error(functionData.error);
+    }
+
+    // 2. EXTRAI O TOKEN DA RESPOSTA DO SERVIDOR
+    // O servidor retorna um link mágico; precisamos do token contido nele.
+    const actionLink = functionData.properties?.action_link;
+    if (!actionLink) {
+        throw new Error('Resposta do servidor inválida: link de ação não encontrado.');
+    }
+    const tokenHash = new URL(actionLink).searchParams.get('token');
+    
+    if (!tokenHash) {
+        throw new Error('Resposta do servidor inválida: token não encontrado no link.');
+    }
+
+    // 3. TROCA O TOKEN POR UMA SESSÃO DE LOGIN VÁLIDA
+    // Esta é a etapa final que autentica o usuário no app.
+    const { data: sessionData, error: sessionError } = await supabase.auth.verifyOtp({
+      type: 'magiclink',
+      token_hash: tokenHash,
+    });
+
+    if (sessionError) {
+      throw new Error(`Erro ao verificar o token: ${sessionError.message}`);
+    }
+
+    // SUCESSO! O usuário está logado. Retorna a sessão.
+    console.log('✅ Login via QR Code bem-sucedido!', sessionData.session?.user.email);
+    return sessionData;
+
+  } catch (error) {
+    console.error('Erro no processo de login com QR Code:', error);
+    // Propaga o erro para que a tela de login possa exibi-lo.
+    throw error;
+  }
+};
+
+
+// ===================================================================
+// SUAS FUNÇÕES DE ACESSO A DADOS (não precisam de alteração)
+// ===================================================================
+
+export const fetchUserEvents = async () => {
+  const { data, error } = await supabase
+    .from('eventos')
+    .select('*')
+    .order('data', { ascending: true });
+
+  if (error) throw error;
+  return data;
+};
+
+// ... suas outras funções (fetchUserNotices, etc.) continuam aqui
