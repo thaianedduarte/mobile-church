@@ -37,17 +37,7 @@ export const supabase = createClient(
   supabaseAnonKey,
   {
     auth: {
-      storage: {
-        getItem: async (key: string) => {
-          return await secureStoreOrLocalStorage.getItem(key);
-        },
-        setItem: async (key: string, value: string) => {
-          await secureStoreOrLocalStorage.setItem(key, value);
-        },
-        removeItem: async (key: string) => {
-          await secureStoreOrLocalStorage.deleteItem(key);
-        },
-      },
+      storage: secureStoreOrLocalStorage,
       autoRefreshToken: true,
       persistSession: true,
       detectSessionInUrl: false,
@@ -59,46 +49,69 @@ export const supabase = createClient(
 export const loginWithQRCode = async (qrCode: string) => {
   try {
     console.log('Tentando login com QR Code:', qrCode);
-    console.log('URL da Edge Function:', `${supabaseUrl}/functions/v1/edge-login`);
     
-    const response = await fetch(`${supabaseUrl}/functions/v1/edge-login`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${supabaseAnonKey}`,
-      },
-      body: JSON.stringify({ qrCode }),
+    // 1. CHAMA A EDGE FUNCTION (usando o método invoke do Supabase)
+    const { data: functionData, error: functionError } = await supabase.functions.invoke(
+      'edge-login',
+      { body: { qrCode } }
+    );
+    
+    if (functionError) {
+      console.error('Erro na edge function:', functionError);
+      throw new Error(functionError.message || 'Falha ao contatar o servidor de login.');
+    }
+
+    if (functionData.error) {
+      console.error('Erro retornado pela edge function:', functionData.error);
+      throw new Error(functionData.error);
+    }
+
+    console.log('Resposta da edge function:', functionData);
+
+    // 2. EXTRAI O TOKEN DA RESPOSTA DO SERVIDOR
+    // O servidor retorna um link mágico; precisamos do token contido nele.
+    const actionLink = functionData.properties?.action_link;
+    if (!actionLink) {
+        throw new Error('Resposta do servidor inválida: link de ação não encontrado.');
+    }
+    
+    const tokenHash = new URL(actionLink).searchParams.get('token');
+    if (!tokenHash) {
+        throw new Error('Resposta do servidor inválida: token não encontrado no link.');
+    }
+
+    console.log('Token extraído:', tokenHash);
+
+    // 3. TROCA O TOKEN POR UMA SESSÃO DE LOGIN VÁLIDA
+    // Esta é a etapa final que autentica o usuário no app.
+    const { data: sessionData, error: sessionError } = await supabase.auth.verifyOtp({
+      type: 'magiclink',
+      token_hash: tokenHash,
     });
 
-    console.log('Response status:', response.status);
-    console.log('Response headers:', Object.fromEntries(response.headers.entries()));
-
-    let data;
-    const responseText = await response.text();
-    console.log('Response text:', responseText);
-
-    try {
-      data = JSON.parse(responseText);
-    } catch (parseError) {
-      console.error('Erro ao fazer parse da resposta:', parseError);
-      throw new Error('Resposta inválida do servidor');
+    if (sessionError) {
+      console.error('Erro ao verificar o token:', sessionError);
+      throw new Error(`Erro ao verificar o token: ${sessionError.message}`);
     }
 
-    if (!response.ok) {
-      console.error('Erro na response:', data);
-      throw new Error(data.error || `Erro HTTP ${response.status}`);
-    }
+    // SUCESSO! O usuário está logado. Retorna a sessão.
+    console.log('✅ Login via QR Code bem-sucedido!', sessionData.session?.user?.email);
+    
+    // Retorna os dados no formato esperado pelo AuthContext
+    return {
+      valid: true,
+      memberId: sessionData.session?.user?.id,
+      email: sessionData.session?.user?.email,
+      name: sessionData.session?.user?.user_metadata?.member_name || 'Usuário',
+      role: sessionData.session?.user?.user_metadata?.member_role || 'Membro',
+      user_id: sessionData.session?.user?.id,
+      access_token: sessionData.session?.access_token
+    };
 
-    if (!data.valid) {
-      console.error('QR Code inválido:', data);
-      throw new Error(data.error || 'QR Code inválido');
-    }
-
-    console.log('Login bem-sucedido:', data);
-    return data;
   } catch (error) {
-    console.error('Erro no login:', error);
-    throw new Error(error.message || 'Erro ao fazer login');
+    console.error('Erro no processo de login com QR Code:', error);
+    // Propaga o erro para que a tela de login possa exibi-lo.
+    throw error;
   }
 };
 
