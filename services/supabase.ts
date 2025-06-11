@@ -1,4 +1,3 @@
-
 import { createClient } from '@supabase/supabase-js';
 import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
@@ -28,12 +27,21 @@ const secureStoreOrLocalStorage = {
   }
 };
 
-// Supabase configuration
+// Supabase configuration with fallbacks and validation
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://crevcbopbhjptuedfzfz.supabase.co';
-const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
 
-// Cliente Supabase configurado
-export const supabase = createClient(
+// Validate required environment variables
+if (!supabaseUrl) {
+  console.error('EXPO_PUBLIC_SUPABASE_URL is required but not set');
+}
+
+if (!supabaseAnonKey) {
+  console.error('EXPO_PUBLIC_SUPABASE_ANON_KEY is required but not set');
+}
+
+// Cliente Supabase configurado - only create if we have required variables
+export const supabase = supabaseUrl && supabaseAnonKey ? createClient(
   supabaseUrl,
   supabaseAnonKey,
   {
@@ -44,7 +52,7 @@ export const supabase = createClient(
       detectSessionInUrl: false,
     },
   }
-);
+) : null;
 
 // ===================================================================
 // FUNÇÃO DE LOGIN
@@ -53,6 +61,11 @@ export const supabase = createClient(
 export const loginWithQRCode = async (qrCode: string) => {
   try {
     console.log('Tentando login com QR Code:', qrCode);
+    
+    // Check if supabase client is available
+    if (!supabase) {
+      throw new Error('Supabase client not initialized. Please check your environment variables.');
+    }
     
     // 1. CHAMA A EDGE FUNCTION (usando o método invoke do Supabase)
     const { data: functionData, error: functionError } = await supabase.functions.invoke(
@@ -129,6 +142,10 @@ export const loginWithQRCode = async (qrCode: string) => {
 export const fetchDashboardData = async (): Promise<DashboardData> => {
   console.log("Iniciando busca de dados para o dashboard...");
 
+  if (!supabase) {
+    throw new Error('Supabase client not initialized. Please check your environment variables.');
+  }
+
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
     throw new Error('Usuário não autenticado. Não é possível buscar dados do dashboard.');
@@ -175,6 +192,10 @@ export const fetchDashboardData = async (): Promise<DashboardData> => {
 export const fetchEvents = async (filter: 'upcoming' | 'past' | 'all' = 'all'): Promise<Event[]> => {
   console.log(`Buscando eventos com o filtro: ${filter}`);
   
+  if (!supabase) {
+    throw new Error('Supabase client not initialized. Please check your environment variables.');
+  }
+  
   try {
     let query = supabase.from('eventos').select('*');
     
@@ -209,6 +230,10 @@ export const fetchEvents = async (filter: 'upcoming' | 'past' | 'all' = 'all'): 
 export const fetchNotices = async (filter: 'all' | 'important' | 'regular' = 'all'): Promise<Notice[]> => {
   console.log(`Buscando avisos com o filtro: ${filter}`);
   
+  if (!supabase) {
+    throw new Error('Supabase client not initialized. Please check your environment variables.');
+  }
+  
   try {
     let query = supabase.from('avisos').select('*').eq('ativo', true);
     
@@ -241,6 +266,10 @@ export const fetchNotices = async (filter: 'all' | 'important' | 'regular' = 'al
 export const fetchDonations = async () => {
   console.log("Buscando contribuições do usuário...");
   
+  if (!supabase) {
+    throw new Error('Supabase client not initialized. Please check your environment variables.');
+  }
+  
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Usuário não autenticado');
 
@@ -268,6 +297,10 @@ export const fetchDonations = async () => {
  */
 export const fetchMemberProfile = async (): Promise<MemberProfile | null> => {
   console.log("Buscando dados do perfil do membro...");
+  
+  if (!supabase) {
+    throw new Error('Supabase client not initialized. Please check your environment variables.');
+  }
   
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
@@ -334,6 +367,10 @@ export const fetchMemberProfile = async (): Promise<MemberProfile | null> => {
 export const fetchBirthdays = async (month: number): Promise<Birthday[]> => {
   console.log(`Buscando aniversariantes do mês ${month}...`);
   
+  if (!supabase) {
+    throw new Error('Supabase client not initialized. Please check your environment variables.');
+  }
+  
   try {
     const { data, error } = await supabase.rpc('get_birthdays_by_month', { month_number: month });
 
@@ -355,6 +392,10 @@ export const fetchBirthdays = async (month: number): Promise<Birthday[]> => {
  */
 export const fetchChurchFinances = async () => {
   console.log("Buscando relatório financeiro da igreja...");
+  
+  if (!supabase) {
+    throw new Error('Supabase client not initialized. Please check your environment variables.');
+  }
   
   try {
     const { data, error } = await supabase.rpc('get_church_finances_report');

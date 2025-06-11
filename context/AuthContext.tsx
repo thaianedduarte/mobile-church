@@ -58,29 +58,46 @@ const secureStoreOrLocalStorage = {
   }
 };
 
-// Initialize Supabase client
-const supabase = createClient(
-  process.env.EXPO_PUBLIC_SUPABASE_URL!,
-  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!,
-  {
-    auth: {
-      storage: {
-        getItem: async (key: string) => {
-          return await secureStoreOrLocalStorage.getItem(key);
+// Get environment variables with fallbacks
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://crevcbopbhjptuedfzfz.supabase.co';
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
+
+// Validate required environment variables
+if (!supabaseUrl) {
+  console.error('EXPO_PUBLIC_SUPABASE_URL is required but not set');
+}
+
+if (!supabaseAnonKey) {
+  console.error('EXPO_PUBLIC_SUPABASE_ANON_KEY is required but not set');
+}
+
+// Initialize Supabase client only if we have the required variables
+let supabase: any = null;
+
+if (supabaseUrl && supabaseAnonKey) {
+  supabase = createClient(
+    supabaseUrl,
+    supabaseAnonKey,
+    {
+      auth: {
+        storage: {
+          getItem: async (key: string) => {
+            return await secureStoreOrLocalStorage.getItem(key);
+          },
+          setItem: async (key: string, value: string) => {
+            await secureStoreOrLocalStorage.setItem(key, value);
+          },
+          removeItem: async (key: string) => {
+            await secureStoreOrLocalStorage.deleteItem(key);
+          },
         },
-        setItem: async (key: string, value: string) => {
-          await secureStoreOrLocalStorage.setItem(key, value);
-        },
-        removeItem: async (key: string) => {
-          await secureStoreOrLocalStorage.deleteItem(key);
-        },
+        autoRefreshToken: true,
+        persistSession: true,
+        detectSessionInUrl: false,
       },
-      autoRefreshToken: true,
-      persistSession: true,
-      detectSessionInUrl: false,
-    },
-  }
-);
+    }
+  );
+}
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -89,12 +106,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   // Check if the user is already authenticated
   useEffect(() => {
+    let isMounted = true;
+
     const bootstrapAsync = async () => {
       try {
+        // If Supabase client is not initialized, skip auth check
+        if (!supabase) {
+          console.warn('Supabase client not initialized - skipping auth check');
+          if (isMounted) {
+            setIsLoading(false);
+          }
+          return;
+        }
+
         // Check current Supabase session first
         const { data: { session } } = await supabase.auth.getSession();
         
-        if (session?.user) {
+        if (session?.user && isMounted) {
           // Load member info from cache or user metadata
           const memberInfoString = await secureStoreOrLocalStorage.getItem(MEMBER_INFO_KEY);
           
@@ -119,39 +147,50 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       } catch (e) {
         console.error('Failed to load authentication data', e);
       } finally {
-        setIsLoading(false);
+        if (isMounted) {
+          setIsLoading(false);
+        }
       }
     };
 
     bootstrapAsync();
 
-    // Listen for auth state changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        if (event === 'SIGNED_IN' && session?.user) {
-          // User signed in - update state if not already set
-          if (!isAuthenticated) {
-            const memberInfoString = await secureStoreOrLocalStorage.getItem(MEMBER_INFO_KEY);
-            if (memberInfoString) {
-              const info = JSON.parse(memberInfoString);
-              setMemberInfo(info);
-              setIsAuthenticated(true);
+    // Listen for auth state changes only if supabase is initialized
+    let subscription: any = null;
+    if (supabase) {
+      const { data: { subscription: authSubscription } } = supabase.auth.onAuthStateChange(
+        async (event: string, session: any) => {
+          if (!isMounted) return;
+
+          if (event === 'SIGNED_IN' && session?.user) {
+            // User signed in - update state if not already set
+            if (!isAuthenticated) {
+              const memberInfoString = await secureStoreOrLocalStorage.getItem(MEMBER_INFO_KEY);
+              if (memberInfoString) {
+                const info = JSON.parse(memberInfoString);
+                setMemberInfo(info);
+                setIsAuthenticated(true);
+              }
             }
+          } else if (event === 'SIGNED_OUT') {
+            // User signed out - clear state
+            setMemberInfo(null);
+            setIsAuthenticated(false);
+            await secureStoreOrLocalStorage.deleteItem(MEMBER_INFO_KEY);
           }
-        } else if (event === 'SIGNED_OUT') {
-          // User signed out - clear state
-          setMemberInfo(null);
-          setIsAuthenticated(false);
-          await secureStoreOrLocalStorage.deleteItem(MEMBER_INFO_KEY);
+          setIsLoading(false);
         }
-        setIsLoading(false);
-      }
-    );
+      );
+      subscription = authSubscription;
+    }
 
     return () => {
-      subscription.unsubscribe();
+      isMounted = false;
+      if (subscription) {
+        subscription.unsubscribe();
+      }
     };
-  }, [isAuthenticated]);
+  }, []);
 
   // Login function
   const login = async (data: MemberInfo & { user_id?: string; access_token?: string }) => {
@@ -178,8 +217,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   // Logout function
   const logout = async () => {
     try {
-      // Sign out from Supabase
-      await supabase.auth.signOut();
+      // Sign out from Supabase if client is available
+      if (supabase) {
+        await supabase.auth.signOut();
+      }
       
       // Clear local storage
       await secureStoreOrLocalStorage.deleteItem(MEMBER_INFO_KEY);
