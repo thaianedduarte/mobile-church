@@ -22,13 +22,8 @@ export interface Notice {
 
 // Donation types
 export interface Donation {
-  id: string;
-  type: 'Dízimo' | 'Oferta' | 'Doação';
+  type: string;
   amount: number;
-  memberId: string | null;
-  memberName: string | null;
-  date: string;
-  notes: string | null;
 }
 
 export interface DonationMonth {
@@ -38,32 +33,16 @@ export interface DonationMonth {
 }
 
 // Church finances types
-export interface Expense {
-  id: string;
-  name: string;
-  amount: number;
-  dueDate: string;
-  type: 'Fixa' | 'Variável';
-  recurring: boolean;
-  paid: boolean;
-  notes: string | null;
-}
-
-export interface ExpenseCategory {
-  name: string;
-  amount: number;
-}
-
-export interface MonthlyFinances {
-  income: number;
-  expenses: number;
-}
-
 export interface ChurchFinances {
-  currentMonth: MonthlyFinances;
   balance: number;
-  expenseCategories: ExpenseCategory[];
-  expenses: Expense[];
+  currentMonth: {
+    income: number;
+    expenses: number;
+  };
+  expenseCategories: {
+    name: string;
+    amount: number;
+  }[];
 }
 
 // Member profile type

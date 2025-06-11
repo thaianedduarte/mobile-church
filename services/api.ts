@@ -7,8 +7,7 @@ import {
   Birthday,
   MemberBasicInfo,
   DashboardData,
-  ChurchFinances,
-  Expense
+  ChurchFinances
 } from '@/types';
 
 // Test authentication key - DO NOT use in production!
@@ -156,22 +155,12 @@ const generateMockData = () => {
       total: 350.00,
       donations: [
         {
-          id: '550e8400-e29b-41d4-a716-446655440007',
           type: 'Dízimo',
-          amount: 250.00,
-          memberId: memberId,
-          memberName: 'João Silva',
-          date: '2023-05-15',
-          notes: null
+          amount: 250.00
         },
         {
-          id: '550e8400-e29b-41d4-a716-446655440008',
           type: 'Oferta',
-          amount: 100.00,
-          memberId: memberId,
-          memberName: 'João Silva',
-          date: '2023-05-15',
-          notes: 'Oferta para missões'
+          amount: 100.00
         }
       ]
     },
@@ -180,68 +169,24 @@ const generateMockData = () => {
       total: 300.00,
       donations: [
         {
-          id: '550e8400-e29b-41d4-a716-446655440009',
           type: 'Dízimo',
-          amount: 250.00,
-          memberId: memberId,
-          memberName: 'João Silva',
-          date: '2023-04-10',
-          notes: null
+          amount: 250.00
         },
         {
-          id: '550e8400-e29b-41d4-a716-446655440010',
           type: 'Oferta',
-          amount: 50.00,
-          memberId: memberId,
-          memberName: 'João Silva',
-          date: '2023-04-20',
-          notes: null
+          amount: 50.00
         }
       ]
     }
   ];
 
-  // Expenses data
-  const expenses: Expense[] = [
-    {
-      id: '550e8400-e29b-41d4-a716-446655440011',
-      name: 'Energia Elétrica',
-      amount: 800.00,
-      dueDate: '2023-05-15',
-      type: 'Fixa',
-      recurring: true,
-      paid: true,
-      notes: null
-    },
-    {
-      id: '550e8400-e29b-41d4-a716-446655440012',
-      name: 'Água',
-      amount: 200.00,
-      dueDate: '2023-05-10',
-      type: 'Fixa',
-      recurring: true,
-      paid: true,
-      notes: null
-    },
-    {
-      id: '550e8400-e29b-41d4-a716-446655440013',
-      name: 'Material Escola Dominical',
-      amount: 500.00,
-      dueDate: '2023-05-20',
-      type: 'Variável',
-      recurring: false,
-      paid: false,
-      notes: 'Materiais para o trimestre'
-    }
-  ];
-
   // Church finances data
   const churchFinances: ChurchFinances = {
+    balance: 25000.00,
     currentMonth: {
       income: 15000.00,
       expenses: 12500.00
     },
-    balance: 25000.00,
     expenseCategories: [
       { name: 'Manutenção', amount: 3000.00 },
       { name: 'Utilidades', amount: 2500.00 },
@@ -249,8 +194,7 @@ const generateMockData = () => {
       { name: 'Eventos', amount: 1500.00 },
       { name: 'Material', amount: 1000.00 },
       { name: 'Outros', amount: 2500.00 }
-    ],
-    expenses: expenses
+    ]
   };
 
   // Profile data
@@ -349,21 +293,25 @@ export const fetchNotices = async (token: string, filter?: 'all' | 'important' |
 
 export const fetchDonations = async (token: string): Promise<DonationMonth[]> => {
   try {
-    await new Promise(resolve => setTimeout(resolve, 800));
-    return mockData.donations;
+    const { fetchDonations: supabaseFetchDonations } = await import('./supabase');
+    return await supabaseFetchDonations();
   } catch (error) {
     console.error('Error fetching donations:', error);
-    throw error;
+    // Fallback to mock data
+    await new Promise(resolve => setTimeout(resolve, 800));
+    return mockData.donations;
   }
 };
 
 export const fetchChurchFinances = async (token: string): Promise<ChurchFinances> => {
   try {
-    await new Promise(resolve => setTimeout(resolve, 800));
-    return mockData.churchFinances;
+    const { fetchChurchFinances: supabaseFetchChurchFinances } = await import('./supabase');
+    return await supabaseFetchChurchFinances();
   } catch (error) {
     console.error('Error fetching church finances:', error);
-    throw error;
+    // Fallback to mock data
+    await new Promise(resolve => setTimeout(resolve, 800));
+    return mockData.churchFinances;
   }
 };
 

@@ -236,30 +236,29 @@ export const fetchNotices = async (filter: 'all' | 'important' | 'regular' = 'al
 };
 
 /**
- * Busca doações/contribuições do usuário.
+ * Busca doações/contribuições do usuário agrupadas por mês.
  */
 export const fetchDonations = async () => {
-  console.log("Buscando doações do usuário...");
+  console.log("Buscando contribuições do usuário...");
   
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Usuário não autenticado');
 
   try {
-    const { data, error } = await supabase
-      .from('doacoes')
-      .select('*')
-      .eq('membro_id', user.user_metadata?.member_id || user.id)
-      .order('data', { ascending: false });
+    const { data, error } = await supabase.rpc('get_my_contributions');
 
     if (error) {
-      console.error('Erro ao buscar doações:', error);
-      throw new Error(`Não foi possível carregar as doações: ${error.message}`);
+      console.error('Erro ao buscar contribuições:', error);
+      throw new Error(`Não foi possível carregar as contribuições: ${error.message}`);
     }
 
-    console.log(`${data?.length || 0} doações encontradas.`);
+    console.log(`Contribuições carregadas com sucesso.`);
+    
+    // A função do banco já retorna os dados agrupados por mês
+    // Se necessário, podemos fazer transformações adicionais aqui
     return data || [];
   } catch (error) {
-    console.error('Erro ao buscar doações:', error);
+    console.error('Erro ao buscar contribuições:', error);
     throw error;
   }
 };
@@ -316,23 +315,23 @@ export const fetchBirthdays = async (): Promise<Birthday[]> => {
 };
 
 /**
- * Busca resumo financeiro da igreja.
+ * Busca relatório completo das finanças da igreja.
  */
 export const fetchChurchFinances = async () => {
-  console.log("Buscando finanças da igreja...");
+  console.log("Buscando relatório financeiro da igreja...");
   
   try {
-    const { data, error } = await supabase.rpc('get_church_finances');
+    const { data, error } = await supabase.rpc('get_church_finances_report');
 
     if (error) {
-      console.error('Erro ao buscar finanças:', error);
-      throw new Error(`Não foi possível carregar as finanças: ${error.message}`);
+      console.error('Erro ao buscar finanças da igreja:', error);
+      throw new Error(`Não foi possível carregar o relatório financeiro: ${error.message}`);
     }
 
-    console.log("Finanças carregadas com sucesso.");
+    console.log("Relatório financeiro carregado com sucesso.");
     return data;
   } catch (error) {
-    console.error('Erro ao buscar finanças:', error);
+    console.error('Erro ao buscar relatório financeiro:', error);
     throw error;
   }
 };
