@@ -254,75 +254,129 @@ const generateMockData = () => {
 // Mock data
 const mockData = generateMockData();
 
-// API Functions - Updated to use Supabase
+// API Functions - Updated to use Supabase with cache
 export const fetchDashboardData = async (token: string): Promise<DashboardData> => {
-  try {
-    const { fetchDashboardData: supabaseFetchDashboard } = await import('./supabase');
-    return await supabaseFetchDashboard();
-  } catch (error) {
-    console.error('Error fetching dashboard data:', error);
-    // Return mock data on error
-    await new Promise(resolve => setTimeout(resolve, 800));
-    return mockData.dashboardData;
-  }
+  const { cacheService } = await import('./cache');
+  
+  return cacheService.getOrFetch(
+    'dashboard_data',
+    async () => {
+      try {
+        const { fetchDashboardData: supabaseFetchDashboard } = await import('./supabase');
+        return await supabaseFetchDashboard();
+      } catch (error) {
+        console.error('Error fetching dashboard data:', error);
+        // Return mock data on error
+        await new Promise(resolve => setTimeout(resolve, 800));
+        return mockData.dashboardData;
+      }
+    },
+    10 // Cache por 10 minutos para dados do dashboard
+  );
 };
 
-export const fetchEvents = async (token: string, filter?: 'upcoming' | 'past' | 'all'): Promise<Event[]> => {
-  try {
-    const { fetchEvents: supabaseFetchEvents } = await import('./supabase');
-    return await supabaseFetchEvents(filter);
-  } catch (error) {
-    console.error('Error fetching events:', error);
-    // Fallback to mock data
-    await new Promise(resolve => setTimeout(resolve, 800));
-    return mockData.events;
-  }
+export const fetchEvents = async (token: string, filter: 'upcoming' | 'past' | 'all' = 'all'): Promise<Event[]> => {
+  const { cacheService } = await import('./cache');
+  
+  return cacheService.getOrFetch(
+    `events_${filter}`,
+    async () => {
+      try {
+        const { fetchEvents: supabaseFetchEvents } = await import('./supabase');
+        return await supabaseFetchEvents(filter);
+      } catch (error) {
+        console.error('Error fetching events:', error);
+        // Fallback to mock data
+        await new Promise(resolve => setTimeout(resolve, 800));
+        return mockData.events;
+      }
+    },
+    15 // Cache por 15 minutos para eventos
+  );
 };
 
-export const fetchNotices = async (token: string, filter?: 'all' | 'important' | 'regular'): Promise<Notice[]> => {
-  try {
-    const { fetchNotices: supabaseFetchNotices } = await import('./supabase');
-    return await supabaseFetchNotices(filter);
-  } catch (error) {
-    console.error('Error fetching notices:', error);
-    // Fallback to mock data
-    await new Promise(resolve => setTimeout(resolve, 800));
-    return mockData.notices;
-  }
+export const fetchNotices = async (token: string, filter: 'all' | 'important' | 'regular' = 'all'): Promise<Notice[]> => {
+  const { cacheService } = await import('./cache');
+  
+  return cacheService.getOrFetch(
+    `notices_${filter}`,
+    async () => {
+      try {
+        const { fetchNotices: supabaseFetchNotices } = await import('./supabase');
+        return await supabaseFetchNotices(filter);
+      } catch (error) {
+        console.error('Error fetching notices:', error);
+        // Fallback to mock data
+        await new Promise(resolve => setTimeout(resolve, 800));
+        return mockData.notices;
+      }
+    },
+    5 // Cache por 5 minutos para avisos (mais dinâmicos)
+  );
 };
 
 export const fetchDonations = async (token: string): Promise<DonationMonth[]> => {
-  try {
-    const { fetchDonations: supabaseFetchDonations } = await import('./supabase');
-    return await supabaseFetchDonations();
-  } catch (error) {
-    console.error('Error fetching donations:', error);
-    // Fallback to mock data
-    await new Promise(resolve => setTimeout(resolve, 800));
-    return mockData.donations;
-  }
+  const { cacheService } = await import('./cache');
+  
+  return cacheService.getOrFetch(
+    'donations',
+    async () => {
+      try {
+        const { fetchDonations: supabaseFetchDonations } = await import('./supabase');
+        return await supabaseFetchDonations();
+      } catch (error) {
+        console.error('Error fetching donations:', error);
+        // Fallback to mock data
+        await new Promise(resolve => setTimeout(resolve, 800));
+        return mockData.donations;
+      }
+    },
+    30 // Cache por 30 minutos para doações
+  );
 };
 
 export const fetchChurchFinances = async (token: string): Promise<ChurchFinances> => {
-  try {
-    const { fetchChurchFinances: supabaseFetchChurchFinances } = await import('./supabase');
-    return await supabaseFetchChurchFinances();
-  } catch (error) {
-    console.error('Error fetching church finances:', error);
-    // Fallback to mock data
-    await new Promise(resolve => setTimeout(resolve, 800));
-    return mockData.churchFinances;
-  }
+  const { cacheService } = await import('./cache');
+  
+  return cacheService.getOrFetch(
+    'church_finances',
+    async () => {
+      try {
+        const { fetchChurchFinances: supabaseFetchChurchFinances } = await import('./supabase');
+        return await supabaseFetchChurchFinances();
+      } catch (error) {
+        console.error('Error fetching church finances:', error);
+        // Fallback to mock data
+        await new Promise(resolve => setTimeout(resolve, 800));
+        return mockData.churchFinances;
+      }
+    },
+    20 // Cache por 20 minutos para finanças da igreja
+  );
 };
 
 export const fetchMemberProfile = async (token: string): Promise<MemberProfile> => {
-  try {
-    await new Promise(resolve => setTimeout(resolve, 800));
-    return mockData.profile;
-  } catch (error) {
-    console.error('Error fetching profile:', error);
-    throw error;
-  }
+  const { cacheService } = await import('./cache');
+  
+  return cacheService.getOrFetch(
+    'member_profile',
+    async () => {
+      try {
+        const { fetchMemberProfile: supabaseFetchMemberProfile } = await import('./supabase');
+        const profile = await supabaseFetchMemberProfile();
+        if (!profile) {
+          throw new Error('Perfil não encontrado');
+        }
+        return profile;
+      } catch (error) {
+        console.error('Error fetching member profile:', error);
+        // Fallback to mock data
+        await new Promise(resolve => setTimeout(resolve, 800));
+        return mockData.profile;
+      }
+    },
+    60 // Cache por 60 minutos para perfil (dados mais estáticos)
+  );
 };
 
 export const fetchBirthdays = async (token: string): Promise<Birthday[]> => {

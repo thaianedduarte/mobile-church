@@ -183,6 +183,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       
       // Clear local storage
       await secureStoreOrLocalStorage.deleteItem(MEMBER_INFO_KEY);
+      
+      // Clear cache
+      try {
+        const { cacheService } = await import('../services/cache');
+        await cacheService.clear();
+      } catch (cacheError) {
+        console.warn('Erro ao limpar cache no logout:', cacheError);
+      }
+      
       setMemberInfo(null);
       setIsAuthenticated(false);
     } catch (e) {

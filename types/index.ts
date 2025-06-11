@@ -47,16 +47,18 @@ export interface ChurchFinances {
 
 // Member profile type
 export interface MemberProfile {
-  id: string;
+  id?: string;
   name: string;
-  cpf: string | null;
-  birthDate: string | null;
-  phone: string | null;
-  email: string | null;
-  address: string | null;
+  cpf: string;
+  birthDate: string;
+  phone?: string;
+  email?: string;
+  address?: string;
   role: string;
-  active: boolean;
-  uuid: string;
+  status: 'active' | 'inactive';
+  active?: boolean;
+  uuid?: string;
+  memberSince: string;
 }
 
 // Member basic info type (for auth context)

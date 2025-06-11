@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, RefreshControl, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/hooks/useAuth';
 import { fetchMemberProfile } from '@/services/api';
 import { MemberProfile } from '@/types';
 import Header from '@/components/Header';
-import { User, QrCode, LogOut, ChevronRight } from 'lucide-react-native';
+import { User, QrCode, LogOut, ChevronRight, RefreshCcw } from 'lucide-react-native';
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -47,6 +47,39 @@ export default function ProfileScreen() {
 
   const navigateToDigitalCard = () => {
     router.push('/profile/card');
+  };
+
+  const handleClearCache = async () => {
+    Alert.alert(
+      'Limpar Cache',
+      'Isso irá remover todos os dados em cache e forçar uma nova busca de informações. Deseja continuar?',
+      [
+        {
+          text: 'Cancelar',
+          style: 'cancel'
+        },
+        {
+          text: 'Confirmar',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const { cacheService } = await import('@/services/cache');
+              await cacheService.clear();
+              
+              // Recarrega os dados do perfil
+              setProfile(null);
+              setLoading(true);
+              await loadProfile();
+              
+              Alert.alert('Sucesso', 'Cache limpo com sucesso!');
+            } catch (error) {
+              console.error('Erro ao limpar cache:', error);
+              Alert.alert('Erro', 'Não foi possível limpar o cache.');
+            }
+          }
+        }
+      ]
+    );
   };
 
   return (
@@ -145,6 +178,26 @@ export default function ProfileScreen() {
                   <View style={styles.actionTextContainer}>
                     <Text style={styles.actionTitle}>Carteirinha Digital</Text>
                     <Text style={styles.actionDescription}>Visualize e compartilhe seu QR Code</Text>
+                  </View>
+                </View>
+                <ChevronRight size={20} color="#9CA3AF" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.sectionContainer}>
+              <Text style={styles.sectionTitle}>Configurações</Text>
+              
+              <TouchableOpacity 
+                style={styles.actionCard}
+                onPress={handleClearCache}
+              >
+                <View style={styles.actionContent}>
+                  <View style={[styles.actionIconContainer, styles.refreshIconContainer]}>
+                    <RefreshCcw size={24} color="#059669" />
+                  </View>
+                  <View style={styles.actionTextContainer}>
+                    <Text style={styles.actionTitle}>Limpar Cache</Text>
+                    <Text style={styles.actionDescription}>Remove dados armazenados localmente</Text>
                   </View>
                 </View>
                 <ChevronRight size={20} color="#9CA3AF" />
@@ -343,6 +396,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 16,
+  },
+  refreshIconContainer: {
+    backgroundColor: '#ECFDF5',
   },
   logoutIconContainer: {
     backgroundColor: '#FEE2E2',

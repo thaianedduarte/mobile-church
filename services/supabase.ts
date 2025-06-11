@@ -264,30 +264,66 @@ export const fetchDonations = async () => {
 };
 
 /**
- * Busca perfil do usuário.
+ * Busca os dados combinados do perfil e do registro de membro do usuário logado.
  */
-export const fetchUserProfile = async (): Promise<MemberProfile> => {
-  console.log("Buscando perfil do usuário...");
+export const fetchMemberProfile = async (): Promise<MemberProfile | null> => {
+  console.log("Buscando dados do perfil do membro...");
   
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('Usuário não autenticado');
+  if (!user) {
+    throw new Error('Usuário não autenticado.');
+  }
 
   try {
+    // A consulta usa um JOIN implícito para buscar dados das tabelas 'membros' e 'profiles' de uma vez.
     const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', user.id)
-      .single();
+      .from('membros')
+      .select(`
+        cpf,
+        nascimento,
+        ativo,
+        created_at,
+        profiles (
+          nome,
+          papel
+        )
+      `)
+      .eq('profile_id', user.id)
+      .single(); // Esperamos apenas um resultado
 
     if (error) {
-      console.error('Erro ao buscar perfil:', error);
-      throw new Error(`Não foi possível carregar o perfil: ${error.message}`);
+      console.error("Erro ao buscar perfil do membro:", error);
+      throw new Error(`Não foi possível carregar os dados do perfil: ${error.message}`);
     }
 
-    console.log("Perfil carregado com sucesso.");
-    return data;
+    if (!data) {
+      return null;
+    }
+    
+    // Formata a data para um formato legível
+    const formatDate = (dateString: string | null) => {
+      if (!dateString) return 'Não informado';
+      return new Date(dateString).toLocaleDateString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+      });
+    };
+
+    // Mapeia os dados brutos para o tipo que a tela espera
+    const profileData: MemberProfile = {
+      name: data.profiles?.nome || 'Nome não encontrado',
+      role: data.profiles?.papel || 'Papel não informado',
+      status: data.ativo ? 'active' : 'inactive',
+      cpf: data.cpf || 'Não informado',
+      birthDate: formatDate(data.nascimento),
+      memberSince: formatDate(data.created_at)
+    };
+
+    console.log("Perfil do membro carregado com sucesso.");
+    return profileData;
   } catch (error) {
-    console.error('Erro ao buscar perfil:', error);
+    console.error('Erro ao buscar perfil do membro:', error);
     throw error;
   }
 };
