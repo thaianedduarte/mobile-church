@@ -20,7 +20,7 @@ export default function NoticesScreen() {
     
     try {
       setError(null);
-      const fetchedNotices = await fetchNotices(userToken);
+      const fetchedNotices = await fetchNotices(userToken, filter);
       setNotices(fetchedNotices);
     } catch (err) {
       setError('Não foi possível carregar os avisos. Tente novamente.');
@@ -33,24 +33,15 @@ export default function NoticesScreen() {
 
   useEffect(() => {
     loadNotices();
-  }, [userToken]);
+  }, [userToken, filter]);
 
   const onRefresh = () => {
     setRefreshing(true);
     loadNotices();
   };
 
-  const getFilteredNotices = () => {
-    if (filter === 'all') {
-      return notices;
-    } else if (filter === 'important') {
-      return notices.filter(notice => notice.priority === 'high');
-    } else {
-      return notices.filter(notice => notice.priority === 'normal');
-    }
-  };
-
-  const filteredNotices = getFilteredNotices();
+  // Server-side filtering is now handled in the API call
+  const filteredNotices = notices;
 
   return (
     <View style={styles.container}>

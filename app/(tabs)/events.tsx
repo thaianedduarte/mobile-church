@@ -20,7 +20,7 @@ export default function EventsScreen() {
     
     try {
       setError(null);
-      const fetchedEvents = await fetchEvents(userToken);
+      const fetchedEvents = await fetchEvents(userToken, filter);
       setEvents(fetchedEvents);
     } catch (err) {
       setError('Não foi possível carregar os eventos. Tente novamente.');
@@ -33,26 +33,15 @@ export default function EventsScreen() {
 
   useEffect(() => {
     loadEvents();
-  }, [userToken]);
+  }, [userToken, filter]);
 
   const onRefresh = () => {
     setRefreshing(true);
     loadEvents();
   };
 
-  const getFilteredEvents = () => {
-    const now = new Date();
-    
-    if (filter === 'all') {
-      return events;
-    } else if (filter === 'upcoming') {
-      return events.filter(event => new Date(event.date) >= now);
-    } else {
-      return events.filter(event => new Date(event.date) < now);
-    }
-  };
-
-  const filteredEvents = getFilteredEvents();
+  // Server-side filtering is now handled in the API call
+  const filteredEvents = events;
 
   return (
     <View style={styles.container}>

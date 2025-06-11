@@ -310,57 +310,40 @@ const generateMockData = () => {
 // Mock data
 const mockData = generateMockData();
 
-// API Functions
+// API Functions - Updated to use Supabase
 export const fetchDashboardData = async (token: string): Promise<DashboardData> => {
   try {
-    // Try to use Supabase client first, fallback to mock data
-    const { supabase } = await import('./supabase');
-    const { data: { user } } = await supabase.auth.getUser();
-    
-    if (user) {
-      // Fetch real data from Supabase with RLS
-      const [events, notices] = await Promise.all([
-        supabase.from('eventos').select('*').limit(2),
-        supabase.from('avisos').select('*').eq('ativo', true).limit(2)
-      ]);
-      
-      // Use real data if available, otherwise fallback to mock
-      if (events.data && notices.data) {
-        return {
-          ...mockData.dashboardData,
-          upcomingEvents: events.data,
-          recentNotices: notices.data
-        };
-      }
-    }
-    
-    // Fallback to mock data
-    await new Promise(resolve => setTimeout(resolve, 800));
-    return mockData.dashboardData;
+    const { fetchDashboardData: supabaseFetchDashboard } = await import('./supabase');
+    return await supabaseFetchDashboard();
   } catch (error) {
     console.error('Error fetching dashboard data:', error);
     // Return mock data on error
+    await new Promise(resolve => setTimeout(resolve, 800));
     return mockData.dashboardData;
   }
 };
 
-export const fetchEvents = async (token: string): Promise<Event[]> => {
+export const fetchEvents = async (token: string, filter?: 'upcoming' | 'past' | 'all'): Promise<Event[]> => {
   try {
-    await new Promise(resolve => setTimeout(resolve, 800));
-    return mockData.events;
+    const { fetchEvents: supabaseFetchEvents } = await import('./supabase');
+    return await supabaseFetchEvents(filter);
   } catch (error) {
     console.error('Error fetching events:', error);
-    throw error;
+    // Fallback to mock data
+    await new Promise(resolve => setTimeout(resolve, 800));
+    return mockData.events;
   }
 };
 
-export const fetchNotices = async (token: string): Promise<Notice[]> => {
+export const fetchNotices = async (token: string, filter?: 'all' | 'important' | 'regular'): Promise<Notice[]> => {
   try {
-    await new Promise(resolve => setTimeout(resolve, 800));
-    return mockData.notices;
+    const { fetchNotices: supabaseFetchNotices } = await import('./supabase');
+    return await supabaseFetchNotices(filter);
   } catch (error) {
     console.error('Error fetching notices:', error);
-    throw error;
+    // Fallback to mock data
+    await new Promise(resolve => setTimeout(resolve, 800));
+    return mockData.notices;
   }
 };
 

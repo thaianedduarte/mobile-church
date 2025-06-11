@@ -2,6 +2,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
+import { DashboardData, Event, Notice, Donation, MemberProfile, Birthday } from '@/types';
 
 // Storage abstraction
 const secureStoreOrLocalStorage = {
@@ -45,7 +46,10 @@ export const supabase = createClient(
   }
 );
 
-// Função para fazer login via Edge Function deployada
+// ===================================================================
+// FUNÇÃO DE LOGIN
+// ===================================================================
+
 export const loginWithQRCode = async (qrCode: string) => {
   try {
     console.log('Tentando login com QR Code:', qrCode);
@@ -115,57 +119,220 @@ export const loginWithQRCode = async (qrCode: string) => {
   }
 };
 
-// Funções para acessar dados com RLS ativo
-export const fetchUserEvents = async () => {
-  const { data, error } = await supabase
-    .from('eventos')
-    .select('*')
-    .order('data', { ascending: true });
+// ===================================================================
+// FUNÇÕES DE DADOS (API)
+// ===================================================================
 
-  if (error) throw error;
-  return data;
-};
+/**
+ * Busca todos os dados necessários para a tela inicial (Dashboard).
+ */
+export const fetchDashboardData = async (): Promise<DashboardData> => {
+  console.log("Iniciando busca de dados para o dashboard...");
 
-export const fetchUserNotices = async () => {
-  const { data, error } = await supabase
-    .from('avisos')
-    .select('*')
-    .eq('ativo', true)
-    .order('data', { ascending: false });
-
-  if (error) throw error;
-  return data;
-};
-
-export const fetchUserDonations = async () => {
   const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    throw new Error('Usuário não autenticado. Não é possível buscar dados do dashboard.');
+  }
+
+  try {
+    const [
+      profileResult,
+      eventsResult,
+      noticesResult,
+      financialResult,
+      birthdaysResult,
+    ] = await Promise.all([
+      supabase.from('profiles').select('nome').eq('id', user.id).single(),
+      supabase.from('eventos').select('*').gte('data', new Date().toISOString()).order('data', { ascending: true }).limit(5),
+      supabase.from('avisos').select('*').eq('ativo', true).order('created_at', { ascending: false }).limit(3),
+      supabase.rpc('get_financial_summary').catch(() => ({ data: { currentMonthAmount: 0, previousMonthAmount: 0 } })),
+      supabase.rpc('get_birthdays_of_the_month').catch(() => ({ data: [] })),
+    ]);
+
+    if (profileResult.error) throw new Error(`Erro ao buscar perfil: ${profileResult.error.message}`);
+    if (eventsResult.error) throw new Error(`Erro ao buscar eventos: ${eventsResult.error.message}`);
+    if (noticesResult.error) throw new Error(`Erro ao buscar avisos: ${noticesResult.error.message}`);
+
+    const dashboardData: DashboardData = {
+      memberName: profileResult.data?.nome || user.user_metadata?.member_name || 'Membro',
+      upcomingEvents: eventsResult.data || [],
+      recentNotices: noticesResult.data || [],
+      financialSummary: financialResult.data || { currentMonthAmount: 0, previousMonthAmount: 0 },
+      birthdaysThisMonth: birthdaysResult.data || [],
+    };
+    
+    console.log("Dados do dashboard carregados com sucesso.");
+    return dashboardData;
+  } catch (error) {
+    console.error('Erro ao buscar dados do dashboard:', error);
+    throw error;
+  }
+};
+
+/**
+ * Busca eventos da igreja com base em um filtro.
+ */
+export const fetchEvents = async (filter: 'upcoming' | 'past' | 'all' = 'all'): Promise<Event[]> => {
+  console.log(`Buscando eventos com o filtro: ${filter}`);
   
+  try {
+    let query = supabase.from('eventos').select('*');
+    
+    const now = new Date().toISOString();
+    
+    if (filter === 'upcoming') {
+      query = query.gte('data', now);
+    } else if (filter === 'past') {
+      query = query.lt('data', now);
+    }
+    
+    query = query.order('data', { ascending: filter === 'past' ? false : true });
+    
+    const { data, error } = await query;
+
+    if (error) {
+      console.error('Erro ao buscar eventos:', error);
+      throw new Error(`Não foi possível carregar os eventos: ${error.message}`);
+    }
+
+    console.log(`${data?.length || 0} eventos encontrados.`);
+    return data || [];
+  } catch (error) {
+    console.error('Erro ao buscar eventos:', error);
+    throw error;
+  }
+};
+
+/**
+ * Busca avisos da igreja com base em um filtro.
+ */
+export const fetchNotices = async (filter: 'all' | 'important' | 'regular' = 'all'): Promise<Notice[]> => {
+  console.log(`Buscando avisos com o filtro: ${filter}`);
+  
+  try {
+    let query = supabase.from('avisos').select('*').eq('ativo', true);
+    
+    if (filter === 'important') {
+      query = query.eq('prioridade', 'alta');
+    } else if (filter === 'regular') {
+      query = query.neq('prioridade', 'alta');
+    }
+    
+    query = query.order('created_at', { ascending: false });
+    
+    const { data, error } = await query;
+
+    if (error) {
+      console.error('Erro ao buscar avisos:', error);
+      throw new Error(`Não foi possível carregar os avisos: ${error.message}`);
+    }
+
+    console.log(`${data?.length || 0} avisos encontrados.`);
+    return data || [];
+  } catch (error) {
+    console.error('Erro ao buscar avisos:', error);
+    throw error;
+  }
+};
+
+/**
+ * Busca doações/contribuições do usuário.
+ */
+export const fetchDonations = async () => {
+  console.log("Buscando doações do usuário...");
+  
+  const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Usuário não autenticado');
 
-  const { data, error } = await supabase
-    .from('doacoes')
-    .select('*')
-    .eq('membro_id', user.user_metadata?.member_id)
-    .order('data', { ascending: false });
+  try {
+    const { data, error } = await supabase
+      .from('doacoes')
+      .select('*')
+      .eq('membro_id', user.user_metadata?.member_id || user.id)
+      .order('data', { ascending: false });
 
-  if (error) throw error;
-  return data;
+    if (error) {
+      console.error('Erro ao buscar doações:', error);
+      throw new Error(`Não foi possível carregar as doações: ${error.message}`);
+    }
+
+    console.log(`${data?.length || 0} doações encontradas.`);
+    return data || [];
+  } catch (error) {
+    console.error('Erro ao buscar doações:', error);
+    throw error;
+  }
 };
 
-export const fetchUserProfile = async () => {
-  const { data: { user } } = await supabase.auth.getUser();
+/**
+ * Busca perfil do usuário.
+ */
+export const fetchUserProfile = async (): Promise<MemberProfile> => {
+  console.log("Buscando perfil do usuário...");
   
+  const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Usuário não autenticado');
 
-  const { data, error } = await supabase
-    .from('membros')
-    .select(`
-      *,
-      profiles!inner(*)
-    `)
-    .eq('id', user.user_metadata?.member_id)
-    .single();
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single();
 
-  if (error) throw error;
-  return data;
+    if (error) {
+      console.error('Erro ao buscar perfil:', error);
+      throw new Error(`Não foi possível carregar o perfil: ${error.message}`);
+    }
+
+    console.log("Perfil carregado com sucesso.");
+    return data;
+  } catch (error) {
+    console.error('Erro ao buscar perfil:', error);
+    throw error;
+  }
+};
+
+/**
+ * Busca aniversariantes do mês.
+ */
+export const fetchBirthdays = async (): Promise<Birthday[]> => {
+  console.log("Buscando aniversariantes do mês...");
+  
+  try {
+    const { data, error } = await supabase.rpc('get_birthdays_of_the_month');
+
+    if (error) {
+      console.error('Erro ao buscar aniversariantes:', error);
+      throw new Error(`Não foi possível carregar os aniversariantes: ${error.message}`);
+    }
+
+    console.log(`${data?.length || 0} aniversariantes encontrados.`);
+    return data || [];
+  } catch (error) {
+    console.error('Erro ao buscar aniversariantes:', error);
+    throw error;
+  }
+};
+
+/**
+ * Busca resumo financeiro da igreja.
+ */
+export const fetchChurchFinances = async () => {
+  console.log("Buscando finanças da igreja...");
+  
+  try {
+    const { data, error } = await supabase.rpc('get_church_finances');
+
+    if (error) {
+      console.error('Erro ao buscar finanças:', error);
+      throw new Error(`Não foi possível carregar as finanças: ${error.message}`);
+    }
+
+    console.log("Finanças carregadas com sucesso.");
+    return data;
+  } catch (error) {
+    console.error('Erro ao buscar finanças:', error);
+    throw error;
+  }
 };
