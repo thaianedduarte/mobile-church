@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { Platform } from 'react-native';
 import { Tabs } from 'expo-router';
-import { Chrome as Home, Calendar, Bell, Receipt, User, CakeSlice } from 'lucide-react-native';
+import { Chrome as Home, Receipt, User, CakeSlice } from 'lucide-react-native';
 import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'expo-router';
 
@@ -45,24 +45,6 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="events"
-        options={{
-          title: 'Eventos',
-          tabBarIcon: ({ color, size }) => (
-            <Calendar size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="notices"
-        options={{
-          title: 'Avisos',
-          tabBarIcon: ({ color, size }) => (
-            <Bell size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
         name="finance"
         options={{
           title: 'Finanças',
@@ -72,20 +54,20 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="profile"
-        options={{
-          title: 'Perfil',
-          tabBarIcon: ({ color, size }) => (
-            <User size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
         name="birthdays"
         options={{
           title: 'Aniversários',
           tabBarIcon: ({ color, size }) => (
             <CakeSlice size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: 'Perfil',
+          tabBarIcon: ({ color, size }) => (
+            <User size={size} color={color} />
           ),
         }}
       />

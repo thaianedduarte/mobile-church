@@ -5,10 +5,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { fetchDashboardData } from '@/services/api';
 import { DashboardData } from '@/types';
 import Header from '@/components/Header';
-import EventCard from '@/components/EventCard';
-import NoticeCard from '@/components/NoticeCard';
 import StatisticsCard from '@/components/StatisticsCard';
-import { Church, Calendar, Bell, Receipt, CakeSlice, QrCode, User } from 'lucide-react-native';
+import { Church, Receipt, CakeSlice, QrCode, User } from 'lucide-react-native';
 
 export default function HomeScreen() {
   const { userToken } = useAuth();
@@ -110,16 +108,6 @@ export default function HomeScreen() {
 
                 <TouchableOpacity 
                   style={styles.quickAccessItem}
-                  onPress={() => navigateTo('/events')}
-                >
-                  <View style={[styles.iconContainer, { backgroundColor: '#FEF3C7' }]}>
-                    <Calendar size={24} color="#B45309" />
-                  </View>
-                  <Text style={styles.quickAccessText}>Eventos</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity 
-                  style={styles.quickAccessItem}
                   onPress={() => navigateTo('/finance')}
                 >
                   <View style={[styles.iconContainer, { backgroundColor: '#DCFCE7' }]}>
@@ -127,43 +115,17 @@ export default function HomeScreen() {
                   </View>
                   <Text style={styles.quickAccessText}>Finanças</Text>
                 </TouchableOpacity>
-              </View>
-            </View>
 
-            {/* Upcoming Events */}
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Próximos Eventos</Text>
-                <TouchableOpacity onPress={() => navigateTo('/events')}>
-                  <Text style={styles.seeAllText}>Ver todos</Text>
+                <TouchableOpacity 
+                  style={styles.quickAccessItem}
+                  onPress={() => navigateTo('/birthdays')}
+                >
+                  <View style={[styles.iconContainer, { backgroundColor: '#FEF3C7' }]}>
+                    <CakeSlice size={24} color="#B45309" />
+                  </View>
+                  <Text style={styles.quickAccessText}>Aniversários</Text>
                 </TouchableOpacity>
               </View>
-
-              {dashboardData?.upcomingEvents && dashboardData.upcomingEvents.length > 0 ? (
-                dashboardData.upcomingEvents.slice(0, 2).map((event) => (
-                  <EventCard key={event.id} event={event} />
-                ))
-              ) : (
-                <Text style={styles.emptyText}>Não há eventos programados</Text>
-              )}
-            </View>
-
-            {/* Recent Notices */}
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Avisos Recentes</Text>
-                <TouchableOpacity onPress={() => navigateTo('/notices')}>
-                  <Text style={styles.seeAllText}>Ver todos</Text>
-                </TouchableOpacity>
-              </View>
-
-              {dashboardData?.recentNotices && dashboardData.recentNotices.length > 0 ? (
-                dashboardData.recentNotices.slice(0, 2).map((notice) => (
-                  <NoticeCard key={notice.id} notice={notice} />
-                ))
-              ) : (
-                <Text style={styles.emptyText}>Não há avisos recentes</Text>
-              )}
             </View>
 
             {/* Financial Summary */}

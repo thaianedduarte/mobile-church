@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
-import { DashboardData, Event, Notice, Donation, MemberProfile, Birthday } from '@/types';
+import { DashboardData, MemberProfile, Birthday, DonationMonth, ChurchFinances } from '@/types';
 
 // Storage abstraction
 const secureStoreOrLocalStorage = {
@@ -154,26 +154,18 @@ export const fetchDashboardData = async (): Promise<DashboardData> => {
   try {
     const [
       profileResult,
-      eventsResult,
-      noticesResult,
       financialResult,
       birthdaysResult,
     ] = await Promise.all([
       supabase.from('profiles').select('nome').eq('id', user.id).single(),
-      supabase.from('eventos').select('*').gte('data', new Date().toISOString()).order('data', { ascending: true }).limit(5),
-      supabase.from('avisos').select('*').eq('ativo', true).order('created_at', { ascending: false }).limit(3),
       supabase.rpc('get_financial_summary').catch(() => ({ data: { currentMonthAmount: 0, previousMonthAmount: 0 } })),
       supabase.rpc('get_birthdays_of_the_month').catch(() => ({ data: [] })),
     ]);
 
     if (profileResult.error) throw new Error(`Erro ao buscar perfil: ${profileResult.error.message}`);
-    if (eventsResult.error) throw new Error(`Erro ao buscar eventos: ${eventsResult.error.message}`);
-    if (noticesResult.error) throw new Error(`Erro ao buscar avisos: ${noticesResult.error.message}`);
 
     const dashboardData: DashboardData = {
       memberName: profileResult.data?.nome || user.user_metadata?.member_name || 'Membro',
-      upcomingEvents: eventsResult.data || [],
-      recentNotices: noticesResult.data || [],
       financialSummary: financialResult.data || { currentMonthAmount: 0, previousMonthAmount: 0 },
       birthdaysThisMonth: birthdaysResult.data || [],
     };
@@ -187,83 +179,9 @@ export const fetchDashboardData = async (): Promise<DashboardData> => {
 };
 
 /**
- * Busca eventos da igreja com base em um filtro.
- */
-export const fetchEvents = async (filter: 'upcoming' | 'past' | 'all' = 'all'): Promise<Event[]> => {
-  console.log(`Buscando eventos com o filtro: ${filter}`);
-  
-  if (!supabase) {
-    throw new Error('Supabase client not initialized. Please check your environment variables.');
-  }
-  
-  try {
-    let query = supabase.from('eventos').select('*');
-    
-    const now = new Date().toISOString();
-    
-    if (filter === 'upcoming') {
-      query = query.gte('data', now);
-    } else if (filter === 'past') {
-      query = query.lt('data', now);
-    }
-    
-    query = query.order('data', { ascending: filter === 'past' ? false : true });
-    
-    const { data, error } = await query;
-
-    if (error) {
-      console.error('Erro ao buscar eventos:', error);
-      throw new Error(`Não foi possível carregar os eventos: ${error.message}`);
-    }
-
-    console.log(`${data?.length || 0} eventos encontrados.`);
-    return data || [];
-  } catch (error) {
-    console.error('Erro ao buscar eventos:', error);
-    throw error;
-  }
-};
-
-/**
- * Busca avisos da igreja com base em um filtro.
- */
-export const fetchNotices = async (filter: 'all' | 'important' | 'regular' = 'all'): Promise<Notice[]> => {
-  console.log(`Buscando avisos com o filtro: ${filter}`);
-  
-  if (!supabase) {
-    throw new Error('Supabase client not initialized. Please check your environment variables.');
-  }
-  
-  try {
-    let query = supabase.from('avisos').select('*').eq('ativo', true);
-    
-    if (filter === 'important') {
-      query = query.eq('prioridade', 'alta');
-    } else if (filter === 'regular') {
-      query = query.neq('prioridade', 'alta');
-    }
-    
-    query = query.order('created_at', { ascending: false });
-    
-    const { data, error } = await query;
-
-    if (error) {
-      console.error('Erro ao buscar avisos:', error);
-      throw new Error(`Não foi possível carregar os avisos: ${error.message}`);
-    }
-
-    console.log(`${data?.length || 0} avisos encontrados.`);
-    return data || [];
-  } catch (error) {
-    console.error('Erro ao buscar avisos:', error);
-    throw error;
-  }
-};
-
-/**
  * Busca doações/contribuições do usuário agrupadas por mês.
  */
-export const fetchDonations = async () => {
+export const fetchDonations = async (): Promise<DonationMonth[]> => {
   console.log("Buscando contribuições do usuário...");
   
   if (!supabase) {
@@ -388,9 +306,9 @@ export const fetchBirthdays = async (month: number): Promise<Birthday[]> => {
 };
 
 /**
- * Busca relatório completo das finanças da igreja.
+ * Busca relatório completo das finanças da igreja (lê da tabela prestacao_contas).
  */
-export const fetchChurchFinances = async () => {
+export const fetchChurchFinances = async (): Promise<ChurchFinances> => {
   console.log("Buscando relatório financeiro da igreja...");
   
   if (!supabase) {
@@ -398,15 +316,72 @@ export const fetchChurchFinances = async () => {
   }
   
   try {
-    const { data, error } = await supabase.rpc('get_church_finances_report');
+    // Busca dados da tabela prestacao_contas
+    const { data, error } = await supabase
+      .from('prestacao_contas')
+      .select('*')
+      .order('mes', { ascending: false })
+      .limit(12); // Últimos 12 meses
 
     if (error) {
-      console.error('Erro ao buscar finanças da igreja:', error);
+      console.error('Erro ao buscar prestação de contas:', error);
       throw new Error(`Não foi possível carregar o relatório financeiro: ${error.message}`);
     }
 
+    if (!data || data.length === 0) {
+      // Retorna dados vazios se não houver prestação de contas
+      return {
+        balance: 0,
+        currentMonth: {
+          income: 0,
+          expenses: 0
+        },
+        expenseCategories: []
+      };
+    }
+
+    // Pega o mês mais recente
+    const currentMonthData = data[0];
+    
+    // Calcula o saldo total (soma de todas as entradas menos saídas)
+    const totalBalance = data.reduce((acc, month) => {
+      return acc + (month.entradas || 0) - (month.saidas || 0);
+    }, 0);
+
+    // Prepara categorias de despesas do mês atual
+    const expenseCategories = [];
+    
+    // Adiciona categorias baseadas nos campos da prestação de contas
+    if (currentMonthData.manutencao > 0) {
+      expenseCategories.push({ name: 'Manutenção', amount: currentMonthData.manutencao });
+    }
+    if (currentMonthData.utilidades > 0) {
+      expenseCategories.push({ name: 'Utilidades', amount: currentMonthData.utilidades });
+    }
+    if (currentMonthData.acao_social > 0) {
+      expenseCategories.push({ name: 'Ação Social', amount: currentMonthData.acao_social });
+    }
+    if (currentMonthData.eventos > 0) {
+      expenseCategories.push({ name: 'Eventos', amount: currentMonthData.eventos });
+    }
+    if (currentMonthData.material > 0) {
+      expenseCategories.push({ name: 'Material', amount: currentMonthData.material });
+    }
+    if (currentMonthData.outros > 0) {
+      expenseCategories.push({ name: 'Outros', amount: currentMonthData.outros });
+    }
+
+    const churchFinances: ChurchFinances = {
+      balance: totalBalance,
+      currentMonth: {
+        income: currentMonthData.entradas || 0,
+        expenses: currentMonthData.saidas || 0
+      },
+      expenseCategories
+    };
+
     console.log("Relatório financeiro carregado com sucesso.");
-    return data;
+    return churchFinances;
   } catch (error) {
     console.error('Erro ao buscar relatório financeiro:', error);
     throw error;

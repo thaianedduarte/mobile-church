@@ -1,7 +1,5 @@
 import axios from 'axios';
 import { 
-  Event, 
-  Notice, 
   DonationMonth, 
   MemberProfile,
   Birthday,
@@ -41,49 +39,9 @@ const generateMockData = () => {
   const memberId = '550e8400-e29b-41d4-a716-446655440000';
   const memberUUID = '38fca868-c675-4749-8823-0b3a1e555247';
   
-  // Dashboard data
+  // Dashboard data (removed events and notices)
   const dashboardData: DashboardData = {
     memberName: 'João Silva',
-    upcomingEvents: [
-      {
-        id: '7d9dc92c-0e88-4758-a7c2-8d6fc6c3e91a',
-        title: 'Culto de Domingo',
-        type: 'Culto',
-        date: new Date(Date.now() + 86400000 * 2).toISOString(),
-        time: '10:00',
-        location: 'Templo Principal',
-        description: 'Culto dominical com celebração da Santa Ceia.'
-      },
-      {
-        id: 'f47ac10b-58cc-4372-a567-0e02b2c3d479',
-        title: 'Reunião de Líderes',
-        type: 'Reunião',
-        date: new Date(Date.now() + 86400000 * 5).toISOString(),
-        time: '19:30',
-        location: 'Sala de Reuniões',
-        description: 'Reunião para planejamento de atividades do próximo mês.'
-      }
-    ],
-    recentNotices: [
-      {
-        id: '6ba7b810-9dad-11d1-80b4-00c04fd430c8',
-        title: 'Campanha de Arrecadação',
-        content: 'Estamos realizando uma campanha de arrecadação de alimentos não perecíveis para o projeto social da igreja.',
-        priority: 'alta',
-        date: new Date(Date.now() - 86400000 * 2).toISOString(),
-        author: 'Pastor José',
-        active: true
-      },
-      {
-        id: '6ba7b811-9dad-11d1-80b4-00c04fd430c8',
-        title: 'Aulas da Escola Dominical',
-        content: 'As aulas da escola dominical retornarão no próximo domingo, às 9h, com novos materiais.',
-        priority: 'média',
-        date: new Date(Date.now() - 86400000 * 5).toISOString(),
-        author: 'Maria Santos',
-        active: true
-      }
-    ],
     financialSummary: {
       currentMonthAmount: 350.00,
       previousMonthAmount: 300.00
@@ -101,52 +59,6 @@ const generateMockData = () => {
       }
     ]
   };
-
-  // Events data
-  const events: Event[] = [
-    ...dashboardData.upcomingEvents,
-    {
-      id: '550e8400-e29b-41d4-a716-446655440003',
-      title: 'Culto de Adoração',
-      type: 'Culto',
-      date: new Date(Date.now() - 86400000 * 7).toISOString(),
-      time: '19:00',
-      location: 'Templo Principal',
-      description: 'Culto de adoração com ministração da Palavra.'
-    },
-    {
-      id: '550e8400-e29b-41d4-a716-446655440004',
-      title: 'Encontro de Jovens',
-      type: 'Outro',
-      date: new Date(Date.now() + 86400000 * 10).toISOString(),
-      time: '20:00',
-      location: 'Auditório',
-      description: 'Encontro mensal dos jovens da igreja com louvor e comunhão.'
-    }
-  ];
-
-  // Notices data
-  const notices: Notice[] = [
-    ...dashboardData.recentNotices,
-    {
-      id: '550e8400-e29b-41d4-a716-446655440005',
-      title: 'Horário de Atendimento Pastoral',
-      content: 'O pastor estará disponível para atendimento às terças e quintas, das 14h às 17h. Agende seu horário na secretaria.',
-      priority: 'baixa',
-      date: new Date(Date.now() - 86400000 * 10).toISOString(),
-      author: 'Secretaria',
-      active: true
-    },
-    {
-      id: '550e8400-e29b-41d4-a716-446655440006',
-      title: 'Acampamento de Verão',
-      content: 'As inscrições para o acampamento de verão já estão abertas. Vagas limitadas!',
-      priority: 'alta',
-      date: new Date(Date.now() - 86400000 * 3).toISOString(),
-      author: 'Ministério de Jovens',
-      active: true
-    }
-  ];
 
   // Donations data
   const donations: DonationMonth[] = [
@@ -241,8 +153,6 @@ const generateMockData = () => {
 
   return {
     dashboardData,
-    events,
-    notices,
     donations,
     churchFinances,
     profile,
@@ -272,46 +182,6 @@ export const fetchDashboardData = async (token: string): Promise<DashboardData> 
       }
     },
     10 // Cache por 10 minutos para dados do dashboard
-  );
-};
-
-export const fetchEvents = async (token: string, filter: 'upcoming' | 'past' | 'all' = 'all'): Promise<Event[]> => {
-  const { cacheService } = await import('./cache');
-  
-  return cacheService.getOrFetch(
-    `events_${filter}`,
-    async () => {
-      try {
-        const { fetchEvents: supabaseFetchEvents } = await import('./supabase');
-        return await supabaseFetchEvents(filter);
-      } catch (error) {
-        console.error('Error fetching events:', error);
-        // Fallback to mock data
-        await new Promise(resolve => setTimeout(resolve, 800));
-        return mockData.events;
-      }
-    },
-    15 // Cache por 15 minutos para eventos
-  );
-};
-
-export const fetchNotices = async (token: string, filter: 'all' | 'important' | 'regular' = 'all'): Promise<Notice[]> => {
-  const { cacheService } = await import('./cache');
-  
-  return cacheService.getOrFetch(
-    `notices_${filter}`,
-    async () => {
-      try {
-        const { fetchNotices: supabaseFetchNotices } = await import('./supabase');
-        return await supabaseFetchNotices(filter);
-      } catch (error) {
-        console.error('Error fetching notices:', error);
-        // Fallback to mock data
-        await new Promise(resolve => setTimeout(resolve, 800));
-        return mockData.notices;
-      }
-    },
-    5 // Cache por 5 minutos para avisos (mais dinâmicos)
   );
 };
 

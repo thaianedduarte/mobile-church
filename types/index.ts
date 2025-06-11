@@ -1,25 +1,3 @@
-// Event type
-export interface Event {
-  id: string;
-  title: string;
-  type: 'Culto' | 'Estudo' | 'Retiro' | 'Reunião' | 'Outro';
-  date: string;
-  time: string | null;
-  location: string | null;
-  description: string | null;
-}
-
-// Notice type
-export interface Notice {
-  id: string;
-  title: string;
-  content: string;
-  priority: 'baixa' | 'média' | 'alta';
-  date: string;
-  author: string;
-  active: boolean;
-}
-
 // Donation types
 export interface Donation {
   type: string;
@@ -77,11 +55,9 @@ export interface Birthday {
   birthDate: string; // formato 'YYYY-MM-DD'
 }
 
-// Dashboard data type
+// Dashboard data type (removed events and notices)
 export interface DashboardData {
   memberName: string;
-  upcomingEvents: Event[];
-  recentNotices: Notice[];
   financialSummary: {
     currentMonthAmount: number;
     previousMonthAmount: number;
