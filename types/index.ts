@@ -74,7 +74,7 @@ export interface MemberBasicInfo {
 export interface Birthday {
   id: string;
   name: string;
-  birthDate: string;
+  birthDate: string; // formato 'YYYY-MM-DD'
 }
 
 // Dashboard data type

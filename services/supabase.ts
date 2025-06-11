@@ -329,13 +329,13 @@ export const fetchMemberProfile = async (): Promise<MemberProfile | null> => {
 };
 
 /**
- * Busca aniversariantes do mês.
+ * Busca aniversariantes de um mês específico.
  */
-export const fetchBirthdays = async (): Promise<Birthday[]> => {
-  console.log("Buscando aniversariantes do mês...");
+export const fetchBirthdays = async (month: number): Promise<Birthday[]> => {
+  console.log(`Buscando aniversariantes do mês ${month}...`);
   
   try {
-    const { data, error } = await supabase.rpc('get_birthdays_of_the_month');
+    const { data, error } = await supabase.rpc('get_birthdays_by_month', { month_number: month });
 
     if (error) {
       console.error('Erro ao buscar aniversariantes:', error);

@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { StyleSheet, Text, View, FlatList, TouchableOpacity, RefreshControl } from 'react-native';
 import { useAuth } from '@/hooks/useAuth';
@@ -21,7 +22,8 @@ export default function BirthdaysScreen() {
     
     try {
       setError(null);
-      const fetchedBirthdays = await fetchBirthdays(userToken);
+      // selectedMonth vai de 0 a 11, mas a função do banco espera de 1 a 12
+      const fetchedBirthdays = await fetchBirthdays(userToken, selectedMonth + 1);
       setBirthdays(fetchedBirthdays);
     } catch (err) {
       setError('Não foi possível carregar os aniversariantes. Tente novamente.');
@@ -32,21 +34,26 @@ export default function BirthdaysScreen() {
     }
   };
 
+  // useEffect reage à mudança do mês e do token
   useEffect(() => {
+    setLoading(true);
     loadBirthdays();
-  }, [userToken]);
+  }, [userToken, selectedMonth]);
 
   const onRefresh = () => {
     setRefreshing(true);
     loadBirthdays();
   };
 
+  const handleMonthChange = (monthIndex: number) => {
+    if (monthIndex !== selectedMonth) {
+      setSelectedMonth(monthIndex);
+      // O useEffect vai disparar automaticamente e recarregar os dados
+    }
+  };
+
   const monthNames = Array.from({ length: 12 }, (_, i) => 
     format(new Date(2000, i, 1), 'MMM', { locale: ptBR })
-  );
-
-  const filteredBirthdays = birthdays.filter(
-    birthday => new Date(birthday.birthDate).getMonth() === selectedMonth
   );
 
   const renderMonthItem = ({ item, index }: { item: string, index: number }) => (
@@ -55,7 +62,7 @@ export default function BirthdaysScreen() {
         styles.monthItem,
         selectedMonth === index && styles.selectedMonthItem
       ]}
-      onPress={() => setSelectedMonth(index)}
+      onPress={() => handleMonthChange(index)}
     >
       <Text 
         style={[
@@ -99,7 +106,7 @@ export default function BirthdaysScreen() {
         <View style={styles.messageContainer}>
           <Text style={styles.loadingText}>Carregando aniversariantes...</Text>
         </View>
-      ) : filteredBirthdays.length === 0 ? (
+      ) : birthdays.length === 0 ? (
         <View style={styles.messageContainer}>
           <CakeSlice size={48} color="#9CA3AF" />
           <Text style={styles.emptyText}>
@@ -108,7 +115,7 @@ export default function BirthdaysScreen() {
         </View>
       ) : (
         <FlatList
-          data={filteredBirthdays}
+          data={birthdays}
           keyExtractor={(item) => item.id.toString()}
           renderItem={({ item }) => (
             <View style={styles.birthdayCard}>
@@ -131,7 +138,7 @@ export default function BirthdaysScreen() {
                 {format(new Date(2000, selectedMonth, 1), 'MMMM', { locale: ptBR })}
               </Text>
               <Text style={styles.resultsText}>
-                {filteredBirthdays.length} {filteredBirthdays.length === 1 ? 'aniversariante' : 'aniversariantes'}
+                {birthdays.length} {birthdays.length === 1 ? 'aniversariante' : 'aniversariantes'}
               </Text>
             </View>
           }

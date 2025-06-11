@@ -379,14 +379,26 @@ export const fetchMemberProfile = async (token: string): Promise<MemberProfile> 
   );
 };
 
-export const fetchBirthdays = async (token: string): Promise<Birthday[]> => {
-  try {
-    await new Promise(resolve => setTimeout(resolve, 800));
-    return mockData.birthdays;
-  } catch (error) {
-    console.error('Error fetching birthdays:', error);
-    throw error;
-  }
+export const fetchBirthdays = async (token: string, month: number): Promise<Birthday[]> => {
+  const { cacheService } = await import('./cache');
+  
+  return cacheService.getOrFetch(
+    `birthdays_${month}`,
+    async () => {
+      try {
+        const { fetchBirthdays: supabaseFetchBirthdays } = await import('./supabase');
+        return await supabaseFetchBirthdays(month);
+      } catch (error) {
+        console.error('Error fetching birthdays:', error);
+        // Fallback to mock data filtrado por mês
+        await new Promise(resolve => setTimeout(resolve, 800));
+        return mockData.birthdays.filter(birthday => 
+          new Date(birthday.birthDate).getMonth() === month - 1
+        );
+      }
+    },
+    30 // Cache por 30 minutos para aniversariantes
+  );
 };
 
 export const fetchMemberBasicInfo = async (token: string): Promise<MemberBasicInfo> => {
