@@ -58,6 +58,9 @@ export const supabase = createClient(
 // Função para fazer login via Edge Function deployada
 export const loginWithQRCode = async (qrCode: string) => {
   try {
+    console.log('Tentando login com QR Code:', qrCode);
+    console.log('URL da Edge Function:', `${supabaseUrl}/functions/v1/edge-login`);
+    
     const response = await fetch(`${supabaseUrl}/functions/v1/edge-login`, {
       method: 'POST',
       headers: {
@@ -67,16 +70,31 @@ export const loginWithQRCode = async (qrCode: string) => {
       body: JSON.stringify({ qrCode }),
     });
 
-    const data = await response.json();
+    console.log('Response status:', response.status);
+    console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+
+    let data;
+    const responseText = await response.text();
+    console.log('Response text:', responseText);
+
+    try {
+      data = JSON.parse(responseText);
+    } catch (parseError) {
+      console.error('Erro ao fazer parse da resposta:', parseError);
+      throw new Error('Resposta inválida do servidor');
+    }
 
     if (!response.ok) {
-      throw new Error(data.error || 'Erro ao fazer login');
+      console.error('Erro na response:', data);
+      throw new Error(data.error || `Erro HTTP ${response.status}`);
     }
 
     if (!data.valid) {
+      console.error('QR Code inválido:', data);
       throw new Error(data.error || 'QR Code inválido');
     }
 
+    console.log('Login bem-sucedido:', data);
     return data;
   } catch (error) {
     console.error('Erro no login:', error);
