@@ -1,0 +1,149 @@
+import { createClient } from '@supabase/supabase-js';
+import { Platform } from 'react-native';
+import * as SecureStore from 'expo-secure-store';
+import { DashboardData, Event } from '@/types'; // Supondo que você tem esses tipos definidos
+
+// Storage abstraction
+const secureStoreOrLocalStorage = {
+  getItem: async (key: string): Promise<string | null> => {
+    if (Platform.OS === 'web') {
+      return localStorage.getItem(key);
+    }
+    return SecureStore.getItemAsync(key);
+  },
+  setItem: async (key: string, value: string): Promise<void> => {
+    if (Platform.OS === 'web') {
+      localStorage.setItem(key, value);
+      return;
+    }
+    return SecureStore.setItemAsync(key, value);
+  },
+  deleteItem: async (key: string): Promise<void> => {
+    if (Platform.OS === 'web') {
+      localStorage.removeItem(key);
+      return;
+    }
+    return SecureStore.deleteItemAsync(key);
+  }
+};
+
+// Supabase configuration
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://crevcbopbhjptuedfzfz.supabase.co';
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
+
+// Cliente Supabase configurado
+export const supabase = createClient(
+  supabaseUrl,
+  supabaseAnonKey,
+  {
+    auth: {
+      storage: secureStoreOrLocalStorage,
+      autoRefreshToken: true,
+      persistSession: true,
+      detectSessionInUrl: false,
+    },
+  }
+);
+
+// ===================================================================
+// FUNÇÃO DE LOGIN
+// ===================================================================
+
+export const loginWithQRCode = async (qrCode: string) => {
+  try {
+    const { data: functionData, error: functionError } = await supabase.functions.invoke(
+      'login-com-qrcode', 
+      { body: { qrCode } }
+    );
+    
+    if (functionError) throw new Error(functionError.message || 'Falha ao contatar o servidor de login.');
+    if (functionData.error) throw new Error(functionData.error);
+
+    const actionLink = functionData.properties?.action_link;
+    if (!actionLink) throw new Error('Resposta do servidor inválida: link de ação não encontrado.');
+    
+    const tokenHash = new URL(actionLink).searchParams.get('token');
+    if (!tokenHash) throw new Error('Resposta do servidor inválida: token não encontrado no link.');
+
+    const { data: sessionData, error: sessionError } = await supabase.auth.verifyOtp({
+      type: 'magiclink',
+      token_hash: tokenHash,
+    });
+
+    if (sessionError) throw new Error(`Erro ao verificar o token: ${sessionError.message}`);
+
+    console.log('✅ Login via QR Code bem-sucedido!', sessionData.session?.user.email);
+    return sessionData;
+
+  } catch (error) {
+    console.error('Erro no processo de login com QR Code:', error);
+    throw error;
+  }
+};
+
+// ===================================================================
+// FUNÇÕES DE DADOS (API)
+// ===================================================================
+
+/**
+ * Busca todos os dados necessários para a tela inicial (Dashboard).
+ */
+export const fetchDashboardData = async (): Promise<DashboardData> => {
+    console.log("Iniciando busca de dados para o dashboard...");
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+        throw new Error('Usuário não autenticado. Não é possível buscar dados do dashboard.');
+    }
+
+    const [
+        profileResult,
+        eventsResult,
+        noticesResult,
+        financialResult,
+        birthdaysResult,
+    ] = await Promise.all([
+        supabase.from('profiles').select('nome').eq('id', user.id).single(),
+        supabase.from('eventos').select('*').gte('data', new Date().toISOString()).order('data', { ascending: true }).limit(5),
+        supabase.from('avisos').select('*').eq('ativo', true).order('created_at', { ascending: false }).limit(3),
+        supabase.rpc('get_financial_summary'),
+        supabase.rpc('get_birthdays_of_the_month'),
+    ]);
+
+    if (profileResult.error) throw new Error(`Erro ao buscar perfil: ${profileResult.error.message}`);
+    if (eventsResult.error) throw new Error(`Erro ao buscar eventos: ${eventsResult.error.message}`);
+    if (noticesResult.error) throw new Error(`Erro ao buscar avisos: ${noticesResult.error.message}`);
+    if (financialResult.error) throw new Error(`Erro ao buscar resumo financeiro: ${financialResult.error.message}`);
+    if (birthdaysResult.error) throw new Error(`Erro ao buscar aniversariantes: ${birthdaysResult.error.message}`);
+
+    const dashboardData: DashboardData = {
+        memberName: profileResult.data?.nome || 'Membro',
+        upcomingEvents: eventsResult.data || [],
+        recentNotices: noticesResult.data || [],
+        financialSummary: financialResult.data,
+        birthdaysThisMonth: birthdaysResult.data || [],
+    };
+    
+    console.log("Dados do dashboard carregados com sucesso.");
+    return dashboardData;
+};
+
+/**
+ * Busca eventos da igreja com base em um filtro, usando uma função RPC para otimização.
+ * @param filter - O tipo de filtro a ser aplicado ('upcoming', 'past', 'all').
+ */
+export const fetchEvents = async (filter: 'upcoming' | 'past' | 'all'): Promise<Event[]> => {
+    console.log(`Buscando eventos com o filtro: ${filter}`);
+    
+    const { data, error } = await supabase.rpc('get_events_by_filter', {
+        filter_option: filter,
+    });
+
+    if (error) {
+        console.error('Erro ao buscar eventos:', error);
+        throw new Error(`Não foi possível carregar os eventos: ${error.message}`);
+    }
+
+    console.log(`${data?.length || 0} eventos encontrados.`);
+    return data || [];
+};
