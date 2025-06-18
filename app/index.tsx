@@ -12,9 +12,17 @@ export default function IndexScreen() {
   useEffect(() => {
     // If auth state is determined, redirect accordingly
     if (!isLoading) {
+      console.log('🔄 Estado de autenticação determinado:', { isAuthenticated });
+      
       // Short delay for smoother transition
       const timer = setTimeout(() => {
-        router.replace(isAuthenticated ? '/initial' : '/access');
+        if (isAuthenticated) {
+          console.log('✅ Usuário autenticado, redirecionando para /initial');
+          router.replace('/initial');
+        } else {
+          console.log('❌ Usuário não autenticado, redirecionando para /access');
+          router.replace('/access');
+        }
       }, 500);
       return () => clearTimeout(timer);
     }

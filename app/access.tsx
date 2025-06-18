@@ -23,6 +23,8 @@ export default function AccessScreen() {
     setIsLoading(true);
     
     try {
+      console.log('🔑 Tentando login manual com chave:', accessKey);
+      
       // Use the Supabase service to login
       const { loginWithQRCode } = await import('@/services/supabase');
       const data = await loginWithQRCode(accessKey);
@@ -31,10 +33,13 @@ export default function AccessScreen() {
         throw new Error(data.error || 'Chave de acesso inválida');
       }
 
+      console.log('✅ Login bem-sucedido, redirecionando...');
+      
       // Store member info and proceed with login
       await login(data);
       router.replace('/initial');
-    } catch (err) {
+    } catch (err: any) {
+      console.error('❌ Erro no login manual:', err);
       setError(err.message || 'Erro ao fazer login. Por favor, tente novamente.');
     } finally {
       setIsLoading(false);
@@ -46,9 +51,13 @@ export default function AccessScreen() {
     setIsLoading(true);
     
     try {
+      console.log('📱 QR Code escaneado:', qrCode);
+      
       // Extract QR code from scanned data
       const codeMatch = qrCode.match(/key=([^&]+)/);
       const code = codeMatch ? codeMatch[1] : qrCode;
+      
+      console.log('🔑 Chave extraída do QR Code:', code);
       
       // Use the Supabase service to login
       const { loginWithQRCode } = await import('@/services/supabase');
@@ -58,10 +67,13 @@ export default function AccessScreen() {
         throw new Error(data.error || 'QR Code inválido');
       }
 
+      console.log('✅ Login por QR Code bem-sucedido, redirecionando...');
+      
       // Store member info and proceed with login
       await login(data);
       router.replace('/initial');
-    } catch (err) {
+    } catch (err: any) {
+      console.error('❌ Erro no login por QR Code:', err);
       setError(err.message || 'QR Code inválido. Por favor, tente novamente.');
     } finally {
       setIsLoading(false);
@@ -89,11 +101,12 @@ export default function AccessScreen() {
 
           <View style={styles.optionsContainer}>
             <TouchableOpacity 
-              style={styles.optionButton}
+              style={[styles.optionButton, isLoading && styles.disabledButton]}
               onPress={() => {
                 setError(null);
                 setShowScanner(true);
               }}
+              disabled={isLoading}
             >
               <View style={styles.optionIcon}>
                 <QrCode size={32} color="#5B21B6" />
@@ -114,7 +127,7 @@ export default function AccessScreen() {
               <Text style={styles.manualTitle}>Insira a Chave Manualmente</Text>
               
               <TextInput
-                style={styles.input}
+                style={[styles.input, isLoading && styles.disabledInput]}
                 placeholder="Insira sua chave de acesso"
                 value={accessKey}
                 onChangeText={setAccessKey}
@@ -123,7 +136,11 @@ export default function AccessScreen() {
                 editable={!isLoading}
               />
               
-              {error && <Text style={styles.errorText}>{error}</Text>}
+              {error && (
+                <View style={styles.errorContainer}>
+                  <Text style={styles.errorText}>{error}</Text>
+                </View>
+              )}
               
               <TouchableOpacity 
                 style={[
@@ -139,6 +156,12 @@ export default function AccessScreen() {
               </TouchableOpacity>
             </View>
           </View>
+
+          {isLoading && (
+            <View style={styles.loadingOverlay}>
+              <Text style={styles.loadingText}>Verificando credenciais...</Text>
+            </View>
+          )}
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -184,6 +207,10 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 20,
     alignItems: 'center',
+  },
+  disabledButton: {
+    backgroundColor: '#E5E7EB',
+    opacity: 0.6,
   },
   optionIcon: {
     backgroundColor: '#EDE9FE',
@@ -235,6 +262,22 @@ const styles = StyleSheet.create({
     padding: 16,
     fontSize: 16,
     marginBottom: 16,
+    fontFamily: 'Montserrat-Regular',
+  },
+  disabledInput: {
+    backgroundColor: '#F3F4F6',
+    color: '#9CA3AF',
+  },
+  errorContainer: {
+    backgroundColor: '#FEE2E2',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
+  },
+  errorText: {
+    fontFamily: 'Montserrat-Medium',
+    color: '#DC2626',
+    textAlign: 'center',
   },
   submitButton: {
     backgroundColor: '#5B21B6',
@@ -242,17 +285,25 @@ const styles = StyleSheet.create({
     padding: 16,
     alignItems: 'center',
   },
-  disabledButton: {
-    backgroundColor: '#9CA3AF',
-  },
   submitButtonText: {
     fontFamily: 'Montserrat-SemiBold',
     color: '#FFFFFF',
     fontSize: 16,
   },
-  errorText: {
-    fontFamily: 'Montserrat-Regular',
-    color: '#DC2626',
-    marginBottom: 16,
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    fontFamily: 'Montserrat-Medium',
+    fontSize: 16,
+    color: '#5B21B6',
+    marginTop: 16,
   },
 });

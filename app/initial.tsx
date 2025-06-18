@@ -1,16 +1,21 @@
-import { StyleSheet, Text, View, TouchableOpacity, Image } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/hooks/useAuth';
-import { LogIn, Church } from 'lucide-react-native';
+import { LogIn, Church, User } from 'lucide-react-native';
 
 export default function InitialScreen() {
   const router = useRouter();
-  const { isAuthenticated, logout } = useAuth();
+  const { isAuthenticated, logout, memberInfo } = useAuth();
 
   const handleEnterApp = () => {
     if (isAuthenticated) {
       router.replace('/(tabs)');
     }
+  };
+
+  const handleLogout = async () => {
+    await logout();
+    router.replace('/access');
   };
 
   return (
@@ -22,6 +27,31 @@ export default function InitialScreen() {
         <Text style={styles.subtitle}>
           Tenha acesso aos eventos, avisos e sua carteirinha digital
         </Text>
+
+        {memberInfo && (
+          <View style={styles.memberInfoCard}>
+            <View style={styles.memberHeader}>
+              <View style={styles.avatarContainer}>
+                <User size={24} color="#FFFFFF" />
+              </View>
+              <View style={styles.memberDetails}>
+                <Text style={styles.memberName}>{memberInfo.name}</Text>
+                <Text style={styles.memberRole}>{memberInfo.role}</Text>
+                <View style={[
+                  styles.statusBadge,
+                  memberInfo.status === 'active' ? styles.activeStatus : styles.inactiveStatus
+                ]}>
+                  <Text style={[
+                    styles.statusText,
+                    memberInfo.status === 'active' ? styles.activeStatusText : styles.inactiveStatusText
+                  ]}>
+                    {memberInfo.status === 'active' ? 'Ativo' : 'Inativo'}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          </View>
+        )}
 
         <View style={styles.cardContainer}>
           <View style={styles.card}>
@@ -42,7 +72,7 @@ export default function InitialScreen() {
 
         <TouchableOpacity
           style={styles.logoutButton}
-          onPress={logout}
+          onPress={handleLogout}
         >
           <Text style={styles.logoutText}>Usar outra chave de acesso</Text>
         </TouchableOpacity>
@@ -79,7 +109,66 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     textAlign: 'center',
     marginTop: 8,
-    marginBottom: 48,
+    marginBottom: 32,
+  },
+  memberInfoCard: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 24,
+    width: '100%',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  memberHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  avatarContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#5B21B6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  memberDetails: {
+    flex: 1,
+  },
+  memberName: {
+    fontFamily: 'Montserrat-SemiBold',
+    fontSize: 16,
+    color: '#1F2937',
+    marginBottom: 2,
+  },
+  memberRole: {
+    fontFamily: 'Montserrat-Regular',
+    fontSize: 14,
+    color: '#6B7280',
+    marginBottom: 6,
+  },
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+  },
+  activeStatus: {
+    backgroundColor: '#DCFCE7',
+  },
+  inactiveStatus: {
+    backgroundColor: '#FEE2E2',
+  },
+  statusText: {
+    fontFamily: 'Montserrat-Medium',
+    fontSize: 10,
+  },
+  activeStatusText: {
+    color: '#16A34A',
+  },
+  inactiveStatusText: {
+    color: '#DC2626',
   },
   cardContainer: {
     width: '100%',

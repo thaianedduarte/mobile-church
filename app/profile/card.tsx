@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, Share, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/hooks/useAuth';
-import { generateQRCode } from '@/services/qrCode';
 import Header from '@/components/Header';
 import QRCode from '@/components/QRCode';
 import { ChevronLeft, Share2, Copy } from 'lucide-react-native';
@@ -20,6 +19,12 @@ export default function DigitalCardScreen() {
       const value = `realm://auth?key=${userToken}`;
       setQrCodeValue(value);
       setLoading(false);
+    } else {
+      // Fallback para quando não há token (modo demo)
+      const fallbackToken = 'test_member_2024';
+      const value = `realm://auth?key=${fallbackToken}`;
+      setQrCodeValue(value);
+      setLoading(false);
     }
   }, [userToken]);
 
@@ -28,18 +33,17 @@ export default function DigitalCardScreen() {
   };
 
   const handleCopyCode = async () => {
-    if (userToken) {
-      await Clipboard.setStringAsync(userToken);
-      Alert.alert('Chave copiada', 'A chave de acesso foi copiada para a área de transferência.');
-    }
+    const codeToShare = userToken || 'test_member_2024';
+    await Clipboard.setStringAsync(codeToShare);
+    Alert.alert('Chave copiada', 'A chave de acesso foi copiada para a área de transferência.');
   };
 
   const handleShare = async () => {
-    if (!userToken) return;
+    const codeToShare = userToken || 'test_member_2024';
     
     try {
       await Share.share({
-        message: `Minha chave de acesso para a Igreja Digital: ${userToken}`,
+        message: `Minha chave de acesso para a Igreja Digital: ${codeToShare}`,
       });
     } catch (error) {
       console.error('Error sharing:', error);
