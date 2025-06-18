@@ -110,13 +110,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
               
               const token = session.access_token;
               
-              // Salva no cache para próximas sessões
+              // Salva no cache para próximas sessões (SEM EXPIRAÇÃO)
               await Promise.all([
                 secureStoreOrLocalStorage.setItem(MEMBER_INFO_KEY, JSON.stringify(info)),
                 secureStoreOrLocalStorage.setItem(USER_TOKEN_KEY, token),
                 secureStoreOrLocalStorage.setItem(SESSION_KEY, JSON.stringify({
                   timestamp: Date.now(),
-                  userId: session.user.id
+                  userId: session.user.id,
+                  persistent: true // Marca como sessão persistente
                 }))
               ]);
               
@@ -130,7 +131,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           }
         }
 
-        // 2. Se não há sessão do Supabase, verifica cache local
+        // 2. Se não há sessão do Supabase, verifica cache local (SEMPRE VÁLIDO)
         if (!isAuthenticated) {
           const [memberInfoString, tokenString, sessionString] = await Promise.all([
             secureStoreOrLocalStorage.getItem(MEMBER_INFO_KEY),
@@ -140,27 +141,27 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
           if (memberInfoString && tokenString && sessionString && isMounted) {
             const sessionData = JSON.parse(sessionString);
-            const now = Date.now();
-            const sessionAge = now - sessionData.timestamp;
-            const maxSessionAge = 30 * 24 * 60 * 60 * 1000; // 30 dias
-
-            // Verifica se a sessão não expirou
-            if (sessionAge < maxSessionAge) {
-              const info = JSON.parse(memberInfoString);
-              setMemberInfo(info);
-              setUserToken(tokenString);
-              setIsAuthenticated(true);
-              console.log('✅ Sessão local válida encontrada');
-            } else {
-              console.log('⏰ Sessão local expirada, limpando dados');
-              await clearStoredData();
-            }
+            
+            // SESSÃO NUNCA EXPIRA - sempre válida até logout manual
+            const info = JSON.parse(memberInfoString);
+            setMemberInfo(info);
+            setUserToken(tokenString);
+            setIsAuthenticated(true);
+            console.log('✅ Sessão local persistente encontrada (sem expiração)');
+            
+            // Atualiza timestamp da última utilização
+            await secureStoreOrLocalStorage.setItem(SESSION_KEY, JSON.stringify({
+              ...sessionData,
+              lastAccess: Date.now(),
+              persistent: true
+            }));
           }
         }
 
       } catch (e) {
         console.error('❌ Erro ao carregar dados de autenticação:', e);
-        await clearStoredData();
+        // NÃO limpa dados automaticamente em caso de erro
+        console.log('⚠️ Mantendo dados locais mesmo com erro');
       } finally {
         if (isMounted) {
           setIsLoading(false);
@@ -193,12 +194,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
               }
             }
           } else if (event === 'SIGNED_OUT') {
-            // Usuário fez logout - limpa estado
-            console.log('🚪 Usuário fez logout');
-            await clearStoredData();
-            setMemberInfo(null);
-            setUserToken(null);
-            setIsAuthenticated(false);
+            // Usuário fez logout APENAS se foi intencional
+            // Não limpa automaticamente em caso de erro de rede
+            console.log('🚪 Evento de logout detectado');
           } else if (event === 'TOKEN_REFRESHED' && session?.access_token) {
             // Token foi renovado - atualiza token armazenado
             setUserToken(session.access_token);
@@ -220,7 +218,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     };
   }, []);
 
-  // Helper function to clear stored data
+  // Helper function to clear stored data (APENAS no logout manual)
   const clearStoredData = async () => {
     try {
       await Promise.all([
@@ -228,6 +226,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         secureStoreOrLocalStorage.deleteItem(USER_TOKEN_KEY),
         secureStoreOrLocalStorage.deleteItem(SESSION_KEY)
       ]);
+      console.log('🗑️ Dados de sessão removidos');
     } catch (error) {
       console.error('Erro ao limpar dados armazenados:', error);
     }
@@ -250,13 +249,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       const token = data.access_token || data.userToken || '';
 
-      // Salva dados no storage seguro
+      // Salva dados no storage seguro (SEM EXPIRAÇÃO)
       await Promise.all([
         secureStoreOrLocalStorage.setItem(MEMBER_INFO_KEY, JSON.stringify(memberInfo)),
         secureStoreOrLocalStorage.setItem(USER_TOKEN_KEY, token),
         secureStoreOrLocalStorage.setItem(SESSION_KEY, JSON.stringify({
           timestamp: Date.now(),
-          userId: memberInfo.memberId
+          userId: memberInfo.memberId,
+          persistent: true, // Marca como sessão persistente
+          lastAccess: Date.now()
         }))
       ]);
 
@@ -266,23 +267,24 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setIsAuthenticated(true);
 
       console.log('✅ Login realizado com sucesso para:', memberInfo.name);
+      console.log('♾️ Sessão configurada como persistente (sem expiração)');
     } catch (e) {
       console.error('❌ Erro no login:', e);
       throw new Error('Falha ao realizar login');
     }
   };
 
-  // Logout function
+  // Logout function (ÚNICO jeito de limpar a sessão)
   const logout = async () => {
     try {
-      console.log('🚪 Iniciando logout...');
+      console.log('🚪 Iniciando logout MANUAL...');
 
       // Sign out from Supabase if client is available
       if (supabase) {
         await supabase.auth.signOut();
       }
       
-      // Clear local storage
+      // Clear local storage APENAS no logout manual
       await clearStoredData();
       
       // Clear cache
@@ -297,7 +299,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setUserToken(null);
       setIsAuthenticated(false);
 
-      console.log('✅ Logout realizado com sucesso');
+      console.log('✅ Logout manual realizado com sucesso');
     } catch (e) {
       console.error('❌ Erro no logout:', e);
     }

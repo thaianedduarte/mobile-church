@@ -1,7 +1,7 @@
 import { StyleSheet, Text, View, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/hooks/useAuth';
-import { LogIn, Church, User } from 'lucide-react-native';
+import { LogIn, Church, User, Clock } from 'lucide-react-native';
 
 export default function InitialScreen() {
   const router = useRouter();
@@ -50,6 +50,11 @@ export default function InitialScreen() {
                 </View>
               </View>
             </View>
+            
+            <View style={styles.sessionInfo}>
+              <Clock size={16} color="#059669" />
+              <Text style={styles.sessionText}>Sessão ativa permanentemente</Text>
+            </View>
           </View>
         )}
 
@@ -57,7 +62,8 @@ export default function InitialScreen() {
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Seu acesso está confirmado</Text>
             <Text style={styles.cardDescription}>
-              Toque no botão abaixo para acessar todas as funcionalidades
+              Toque no botão abaixo para acessar todas as funcionalidades. 
+              Sua sessão permanecerá ativa até você fazer logout.
             </Text>
             
             <TouchableOpacity
@@ -80,6 +86,7 @@ export default function InitialScreen() {
 
       <View style={styles.footer}>
         <Text style={styles.footerText}>Igreja Digital • v1.0</Text>
+        <Text style={styles.footerSubtext}>Sessão persistente ativa</Text>
       </View>
     </View>
   );
@@ -123,6 +130,7 @@ const styles = StyleSheet.create({
   memberHeader: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: 12,
   },
   avatarContainer: {
     width: 48,
@@ -170,6 +178,21 @@ const styles = StyleSheet.create({
   inactiveStatusText: {
     color: '#DC2626',
   },
+  sessionInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+  },
+  sessionText: {
+    fontFamily: 'Montserrat-Medium',
+    fontSize: 12,
+    color: '#059669',
+    marginLeft: 6,
+  },
   cardContainer: {
     width: '100%',
     shadowColor: '#000',
@@ -200,6 +223,7 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     textAlign: 'center',
     marginBottom: 24,
+    lineHeight: 24,
   },
   button: {
     backgroundColor: '#5B21B6',
@@ -234,5 +258,11 @@ const styles = StyleSheet.create({
     fontFamily: 'Montserrat-Regular',
     fontSize: 12,
     color: '#9CA3AF',
+  },
+  footerSubtext: {
+    fontFamily: 'Montserrat-Regular',
+    fontSize: 10,
+    color: '#16A34A',
+    marginTop: 2,
   },
 });
