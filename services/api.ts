@@ -7,6 +7,8 @@ import {
   DashboardData,
   ChurchFinances
 } from '@/types';
+import { supabase } from './supabase';
+import { cacheService } from './cache';
 
 // Test authentication key - DO NOT use in production!
 export const TEST_AUTH_KEY = "test_member_2024";
@@ -33,137 +35,6 @@ const addAuthHeader = (token: string) => {
   };
 };
 
-// Mock data for development/demo
-const generateMockData = () => {
-  // Member data
-  const memberId = '550e8400-e29b-41d4-a716-446655440000';
-  const memberUUID = '38fca868-c675-4749-8823-0b3a1e555247';
-  
-  // Dashboard data (removed events and notices)
-  const dashboardData: DashboardData = {
-    memberName: 'João Silva',
-    financialSummary: {
-      currentMonthAmount: 350.00,
-      previousMonthAmount: 300.00
-    },
-    birthdaysThisMonth: [
-      {
-        id: '550e8400-e29b-41d4-a716-446655440001',
-        name: 'Maria Oliveira',
-        birthDate: '15/05'
-      },
-      {
-        id: '550e8400-e29b-41d4-a716-446655440002',
-        name: 'Carlos Souza',
-        birthDate: '22/05'
-      }
-    ]
-  };
-
-  // Donations data
-  const donations: DonationMonth[] = [
-    {
-      date: 'maio de 2023',
-      total: 350.00,
-      donations: [
-        {
-          type: 'Dízimo',
-          amount: 250.00
-        },
-        {
-          type: 'Oferta',
-          amount: 100.00
-        }
-      ]
-    },
-    {
-      date: 'abril de 2023',
-      total: 300.00,
-      donations: [
-        {
-          type: 'Dízimo',
-          amount: 250.00
-        },
-        {
-          type: 'Oferta',
-          amount: 50.00
-        }
-      ]
-    }
-  ];
-
-  // Church finances data
-  const churchFinances: ChurchFinances = {
-    balance: 25000.00,
-    currentMonth: {
-      income: 15000.00,
-      expenses: 12500.00
-    },
-    expenseCategories: [
-      { name: 'Manutenção', amount: 3000.00 },
-      { name: 'Utilidades', amount: 2500.00 },
-      { name: 'Ação Social', amount: 2000.00 },
-      { name: 'Eventos', amount: 1500.00 },
-      { name: 'Material', amount: 1000.00 },
-      { name: 'Outros', amount: 2500.00 }
-    ]
-  };
-
-  // Profile data
-  const profile: MemberProfile = {
-    id: memberId,
-    name: 'João Silva',
-    cpf: '123.456.789-00',
-    birthDate: '1985-06-10',
-    phone: '(11) 98765-4321',
-    email: 'joao.silva@email.com',
-    address: 'Rua das Flores, 123 - Centro',
-    role: 'Membro',
-    active: true,
-    uuid: memberUUID
-  };
-
-  // Birthdays data
-  const birthdays: Birthday[] = [
-    {
-      id: '550e8400-e29b-41d4-a716-446655440014',
-      name: 'Maria Oliveira',
-      birthDate: '2023-05-15'
-    },
-    {
-      id: '550e8400-e29b-41d4-a716-446655440015',
-      name: 'Carlos Souza',
-      birthDate: '2023-05-22'
-    },
-    {
-      id: '550e8400-e29b-41d4-a716-446655440016',
-      name: 'Ana Santos',
-      birthDate: '2023-06-05'
-    }
-  ];
-
-  // Member basic info
-  const memberBasicInfo: MemberBasicInfo = {
-    id: memberId,
-    name: 'João Silva',
-    role: 'Membro',
-    active: true,
-    uuid: memberUUID
-  };
-
-  return {
-    dashboardData,
-    donations,
-    churchFinances,
-    profile,
-    birthdays,
-    memberBasicInfo
-  };
-};
-
-// Mock data
-const mockData = generateMockData();
-
 // API Functions - Updated to use Supabase with cache
 export const fetchDashboardData = async (token: string): Promise<DashboardData> => {
   const { cacheService } = await import('./cache');
@@ -176,9 +47,7 @@ export const fetchDashboardData = async (token: string): Promise<DashboardData> 
         return await supabaseFetchDashboard();
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
-        // Return mock data on error
-        await new Promise(resolve => setTimeout(resolve, 800));
-        return mockData.dashboardData;
+        throw error;
       }
     },
     10 // Cache por 10 minutos para dados do dashboard
@@ -196,9 +65,7 @@ export const fetchDonations = async (token: string): Promise<DonationMonth[]> =>
         return await supabaseFetchDonations();
       } catch (error) {
         console.error('Error fetching donations:', error);
-        // Fallback to mock data
-        await new Promise(resolve => setTimeout(resolve, 800));
-        return mockData.donations;
+        throw error;
       }
     },
     30 // Cache por 30 minutos para doações
@@ -216,67 +83,170 @@ export const fetchChurchFinances = async (token: string): Promise<ChurchFinances
         return await supabaseFetchChurchFinances();
       } catch (error) {
         console.error('Error fetching church finances:', error);
-        // Fallback to mock data
-        await new Promise(resolve => setTimeout(resolve, 800));
-        return mockData.churchFinances;
+        throw error;
       }
     },
     20 // Cache por 20 minutos para finanças da igreja
   );
 };
 
-export const fetchMemberProfile = async (token: string): Promise<MemberProfile> => {
-  const { cacheService } = await import('./cache');
-  
-  return cacheService.getOrFetch(
-    'member_profile',
-    async () => {
-      try {
-        const { fetchMemberProfile: supabaseFetchMemberProfile } = await import('./supabase');
-        const profile = await supabaseFetchMemberProfile();
-        if (!profile) {
-          throw new Error('Perfil não encontrado');
-        }
-        return profile;
-      } catch (error) {
-        console.error('Error fetching member profile:', error);
-        // Fallback to mock data
-        await new Promise(resolve => setTimeout(resolve, 800));
-        return mockData.profile;
+// ===================================================================
+// NOVA FUNÇÃO PARA A TELA DE PERFIL
+// ===================================================================
+const PROFILE_CACHE_KEY = 'member_profile';
+
+/**
+ * Busca os dados combinados do perfil e do registro de membro do usuário logado.
+ * Usa cache para performance, pois esses dados mudam raramente.
+ */
+export const fetchMemberProfile = async (): Promise<MemberProfile | null> => {
+    // 1. Tenta buscar do cache primeiro
+    const cachedProfile = await cacheService.get(PROFILE_CACHE_KEY);
+    if (cachedProfile) {
+      console.log('[fetchMemberProfile] Retornando dados do cache');
+      return cachedProfile;
+    }
+
+    console.log('[fetchMemberProfile] Buscando dados do banco');
+    
+    // 2. Busca os dados do usuário atual
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) {
+      console.error('[fetchMemberProfile] Erro ao buscar usuário:', userError);
+      throw new Error('Usuário não autenticado');
+    }
+
+    // 3. Busca os dados do perfil do membro
+    const { data, error } = await supabase
+      .from('membros')
+      .select(`
+        *,
+        profiles (
+          papel
+        )
+      `)
+      .eq('user_id', user.id)
+      .single();
+
+    if (error) {
+      console.error('[fetchMemberProfile] Erro ao buscar perfil:', error);
+      throw error;
+    }
+
+    console.log('[fetchMemberProfile] Dados brutos do banco:', JSON.stringify(data, null, 2));
+    console.log('[fetchMemberProfile] Created at:', data?.created_at);
+
+    // 4. Formata os dados para o tipo que a tela espera
+    const formatDate = (dateString: string | null) => {
+      if (!dateString) return 'Não informado';
+      // Adiciona 'T00:00:00' para garantir que a data seja interpretada corretamente como local
+      return new Date(dateString + 'T00:00:00').toLocaleDateString('pt-BR', {
+        day: '2-digit',
+        month: 'long',
+        year: 'numeric'
+      });
+    };
+
+    // Função específica para formatar o created_at
+    const formatCreatedAt = (dateString: string | null) => {
+      if (!dateString) {
+        console.log('[formatCreatedAt] Data nula recebida');
+        return 'Não informado';
       }
-    },
-    60 // Cache por 60 minutos para perfil (dados mais estáticos)
-  );
+      try {
+        console.log('[formatCreatedAt] Data recebida:', dateString);
+        // Remove a parte do timezone e milissegundos
+        const cleanDate = dateString.split('+')[0].trim();
+        console.log('[formatCreatedAt] Data limpa:', cleanDate);
+        const formattedDate = new Date(cleanDate).toLocaleDateString('pt-BR', {
+          day: '2-digit',
+          month: 'long',
+          year: 'numeric'
+        });
+        console.log('[formatCreatedAt] Data formatada:', formattedDate);
+        return formattedDate;
+      } catch (error) {
+        console.error('[formatCreatedAt] Erro ao formatar created_at:', error);
+        return 'Data inválida';
+      }
+    };
+
+    // CORREÇÃO: Mapeia `data.nome` para o nome e `data.profiles.papel` para o cargo.
+    const profileData: MemberProfile = {
+      name: data.nome || 'Nome não encontrado',
+      role: data.profiles?.[0].papel || 'Papel não informado',
+      status: data.ativo ? 'active' : 'inactive',
+      cpf: data.cpf || 'Não informado',
+      birthDate: formatDate(data.nascimento),
+      memberSince: formatCreatedAt(data.created_at)
+    };
+
+    console.log('[fetchMemberProfile] Dados formatados:', JSON.stringify(profileData, null, 2));
+
+    // 5. Salva no cache por 60 minutos
+    await cacheService.set(PROFILE_CACHE_KEY, profileData, 60 * 60 * 1000);
+
+    return profileData;
 };
 
-export const fetchBirthdays = async (token: string, month: number): Promise<Birthday[]> => {
-  const { cacheService } = await import('./cache');
-  
-  return cacheService.getOrFetch(
-    `birthdays_${month}`,
-    async () => {
-      try {
-        const { fetchBirthdays: supabaseFetchBirthdays } = await import('./supabase');
-        return await supabaseFetchBirthdays(month);
-      } catch (error) {
-        console.error('Error fetching birthdays:', error);
-        // Fallback to mock data filtrado por mês
-        await new Promise(resolve => setTimeout(resolve, 800));
-        return mockData.birthdays.filter(birthday => 
-          new Date(birthday.birthDate).getMonth() === month - 1
-        );
-      }
-    },
-    30 // Cache por 30 minutos para aniversariantes
-  );
+// ===================================================================
+// NOVA FUNÇÃO PARA A TELA DE ANIVERSARIANTES
+// ===================================================================
+const BIRTHDAYS_CACHE_KEY_PREFIX = 'birthdays_month_';
+
+/**
+ * Busca os aniversariantes de um mês específico.
+ * @param month - O número do mês (1 para Janeiro, 2 para Fevereiro, etc.).
+ */
+export const fetchBirthdays = async (month: number): Promise<Birthday[]> => {
+    const cacheKey = `${BIRTHDAYS_CACHE_KEY_PREFIX}${month}`;
+    
+    // 1. Tenta buscar do cache primeiro
+    const cachedBirthdays = await cacheService.get<Birthday[]>(cacheKey);
+    if (cachedBirthdays) {
+        return cachedBirthdays;
+    }
+    
+    console.log(`[API] Cache para aniversariantes do mês ${month} não encontrado. Buscando dados novos...`);
+
+    // 2. Se não há cache, busca no Supabase via RPC
+    if (!supabase) {
+        throw new Error('Cliente Supabase não inicializado. Verifique suas variáveis de ambiente.');
+    }
+
+    const { data, error } = await supabase.rpc('get_birthdays_by_month', {
+        p_month: month,
+    });
+
+    if (error) {
+        console.error('Erro ao buscar aniversariantes:', error);
+        throw new Error(`Não foi possível carregar os aniversariantes: ${error.message}`);
+    }
+
+    const birthdaysData: Birthday[] = (data || []).map((b: any) => ({
+        id: b.id,
+        name: b.name,
+        birthDate: b.birthdate, // Garante que o nome da propriedade seja o esperado pelo tipo
+    }));
+
+    // 3. Salva os dados no cache
+    await cacheService.set(cacheKey, birthdaysData, 60); // Cache por 60 minutos
+
+    console.log(`Aniversariantes do mês ${month} carregados e cacheados com sucesso.`);
+    return birthdaysData;
 };
 
-export const fetchMemberBasicInfo = async (token: string): Promise<MemberBasicInfo> => {
-  try {
-    await new Promise(resolve => setTimeout(resolve, 800));
-    return mockData.memberBasicInfo;
-  } catch (error) {
-    console.error('Error fetching member info:', error);
+export const fetchMemberBasicInfo = async (): Promise<MemberBasicInfo> => {
+  const { data, error } = await supabase
+    .from('members')
+    .select('id, name, role, active, uuid')
+    .eq('active', true)
+    .single();
+
+  if (error) {
+    console.error('Error fetching member basic info:', error);
     throw error;
   }
+
+  return data;
 };

@@ -1,7 +1,5 @@
-
 import { useState, useEffect } from 'react';
 import { StyleSheet, Text, View, FlatList, TouchableOpacity, RefreshControl } from 'react-native';
-import { useAuth } from '@/hooks/useAuth';
 import { fetchBirthdays } from '@/services/api';
 import { Birthday } from '@/types';
 import Header from '@/components/Header';
@@ -10,7 +8,6 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 export default function BirthdaysScreen() {
-  const { userToken } = useAuth();
   const [birthdays, setBirthdays] = useState<Birthday[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -18,35 +15,40 @@ export default function BirthdaysScreen() {
   const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth());
 
   const loadBirthdays = async () => {
-    if (!userToken) return;
+    console.log('[BirthdaysScreen] Iniciando carregamento dos aniversariantes');
     
     try {
       setError(null);
       // selectedMonth vai de 0 a 11, mas a função do banco espera de 1 a 12
-      const fetchedBirthdays = await fetchBirthdays(userToken, selectedMonth + 1);
+      const fetchedBirthdays = await fetchBirthdays(selectedMonth + 1);
+      console.log('[BirthdaysScreen] Dados recebidos:', fetchedBirthdays);
       setBirthdays(fetchedBirthdays);
     } catch (err) {
+      console.error('[BirthdaysScreen] Erro ao carregar aniversariantes:', err);
       setError('Não foi possível carregar os aniversariantes. Tente novamente.');
-      console.error('Birthdays error:', err);
     } finally {
+      console.log('[BirthdaysScreen] Finalizando carregamento');
       setLoading(false);
       setRefreshing(false);
     }
   };
 
-  // useEffect reage à mudança do mês e do token
+  // useEffect reage à mudança do mês
   useEffect(() => {
+    console.log('[BirthdaysScreen] useEffect iniciado para o mês:', selectedMonth + 1);
     setLoading(true);
     loadBirthdays();
-  }, [userToken, selectedMonth]);
+  }, [selectedMonth]);
 
   const onRefresh = () => {
+    console.log('[BirthdaysScreen] Iniciando refresh');
     setRefreshing(true);
     loadBirthdays();
   };
 
   const handleMonthChange = (monthIndex: number) => {
     if (monthIndex !== selectedMonth) {
+      console.log('[BirthdaysScreen] Alterando mês para:', monthIndex + 1);
       setSelectedMonth(monthIndex);
       // O useEffect vai disparar automaticamente e recarregar os dados
     }

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { StyleSheet, Text, View, ScrollView, TouchableOpacity, RefreshControl, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/hooks/useAuth';
@@ -9,47 +9,62 @@ import { User, QrCode, LogOut, ChevronRight, RefreshCcw } from 'lucide-react-nat
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const { userToken, logout } = useAuth();
+  const { logout } = useAuth();
   const [profile, setProfile] = useState<MemberProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const loadProfile = async () => {
-    if (!userToken) return;
+    console.log('[ProfileScreen] Iniciando carregamento do perfil');
     
     try {
       setError(null);
-      const fetchedProfile = await fetchMemberProfile(userToken);
+      const fetchedProfile = await fetchMemberProfile();
+      console.log('[ProfileScreen] Dados brutos recebidos:', JSON.stringify(fetchedProfile, null, 2));
+      console.log('[ProfileScreen] Data de criação:', fetchedProfile?.memberSince);
+      console.log('[ProfileScreen] Data de nascimento:', fetchedProfile?.birthDate);
+      
+      if (!fetchedProfile) {
+        setError('Não foi possível encontrar seu perfil');
+        return;
+      }
+      
       setProfile(fetchedProfile);
     } catch (err) {
+      console.error('[ProfileScreen] Erro ao carregar perfil:', err);
       setError('Não foi possível carregar seu perfil. Tente novamente.');
-      console.error('Profile error:', err);
     } finally {
+      console.log('[ProfileScreen] Finalizando carregamento');
       setLoading(false);
       setRefreshing(false);
     }
   };
 
   useEffect(() => {
+    console.log('[ProfileScreen] useEffect iniciado');
     loadProfile();
-  }, [userToken]);
+  }, []);
 
   const onRefresh = () => {
+    console.log('[ProfileScreen] Iniciando refresh');
     setRefreshing(true);
     loadProfile();
   };
 
   const handleLogout = async () => {
+    console.log('[ProfileScreen] Iniciando logout');
     await logout();
     router.replace('/access');
   };
 
   const navigateToDigitalCard = () => {
+    console.log('[ProfileScreen] Navegando para carteirinha digital');
     router.push('/profile/card');
   };
 
   const handleClearCache = async () => {
+    console.log('[ProfileScreen] Iniciando limpeza de cache');
     Alert.alert(
       'Limpar Cache',
       'Isso irá remover todos os dados em cache e forçar uma nova busca de informações. Deseja continuar?',
@@ -66,14 +81,14 @@ export default function ProfileScreen() {
               const { cacheService } = await import('@/services/cache');
               await cacheService.clear();
               
-              // Recarrega os dados do perfil
+              console.log('[ProfileScreen] Cache limpo com sucesso');
               setProfile(null);
               setLoading(true);
               await loadProfile();
               
               Alert.alert('Sucesso', 'Cache limpo com sucesso!');
             } catch (error) {
-              console.error('Erro ao limpar cache:', error);
+              console.error('[ProfileScreen] Erro ao limpar cache:', error);
               Alert.alert('Erro', 'Não foi possível limpar o cache.');
             }
           }
@@ -111,7 +126,7 @@ export default function ProfileScreen() {
             </Text>
           </View>
         ) : (
-          <>
+          <React.Fragment>
             <View style={styles.profileHeader}>
               <View style={styles.avatarContainer}>
                 <Text style={styles.avatarText}>
@@ -218,7 +233,7 @@ export default function ProfileScreen() {
                 </View>
               </TouchableOpacity>
             </View>
-          </>
+          </React.Fragment>
         )}
       </ScrollView>
     </View>

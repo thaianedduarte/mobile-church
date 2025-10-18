@@ -1,56 +1,41 @@
 import { useEffect } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
-import { useRouter } from 'expo-router';
-import { useAuth } from '@/hooks/useAuth';
-import { LoadingScreen } from '@/components/LoadingScreen';
-import { Church } from 'lucide-react-native';
+import { View, ActivityIndicator } from 'react-native';
+import { router } from 'expo-router';
+import { useAuth } from '@/context/AuthContext';
+import { fetchBirthdays } from '@/services/api';
 
-export default function IndexScreen() {
-  const router = useRouter();
-  const { isAuthenticated, isLoading } = useAuth();
+export default function Index() {
+  const { session, loading } = useAuth();
 
   useEffect(() => {
-    // If auth state is determined, redirect accordingly
-    if (!isLoading) {
-      // Short delay for smoother transition
-      const timer = setTimeout(() => {
-        router.replace(isAuthenticated ? '/initial' : '/access');
-      }, 500);
-      return () => clearTimeout(timer);
-    }
-  }, [isLoading, isAuthenticated, router]);
+    const initializeApp = async () => {
+      try {
+        // Carrega os aniversariantes do mês atual em background
+        fetchBirthdays(new Date().getMonth() + 1).catch(console.error);
 
-  if (isLoading) {
-    return <LoadingScreen />;
-  }
+        // Pequeno delay para garantir que a UI esteja pronta
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        // Redireciona baseado no estado de autenticação
+        if (session) {
+          router.replace('/(tabs)');
+        } else {
+          router.replace('/access');
+        }
+      } catch (error) {
+        console.error('[Index] Erro ao inicializar app:', error);
+        router.replace('/access');
+      }
+    };
+
+    if (!loading) {
+      initializeApp();
+    }
+  }, [session, loading]);
 
   return (
-    <View style={styles.container}>
-      <Church size={80} color="#5B21B6" />
-      <Text style={styles.title}>Igreja Digital</Text>
-      <Text style={styles.subtitle}>Carregando...</Text>
+    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F9FAFB' }}>
+      <ActivityIndicator size="large" color="#5B21B6" />
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 20,
-  },
-  title: {
-    fontFamily: 'Montserrat-Bold',
-    fontSize: 28,
-    marginTop: 24,
-    color: '#1F2937',
-  },
-  subtitle: {
-    fontFamily: 'Montserrat-Regular',
-    fontSize: 18,
-    marginTop: 8,
-    color: '#6B7280',
-  },
-});

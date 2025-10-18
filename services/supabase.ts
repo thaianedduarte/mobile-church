@@ -1,3 +1,5 @@
+import 'react-native-url-polyfill/auto';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
 import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
@@ -27,7 +29,7 @@ const secureStoreOrLocalStorage = {
   }
 };
 
-// Supabase configuration with fallbacks and validation
+// Get environment variables with fallbacks
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://crevcbopbhjptuedfzfz.supabase.co';
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
 
@@ -40,19 +42,15 @@ if (!supabaseAnonKey) {
   console.error('EXPO_PUBLIC_SUPABASE_ANON_KEY is required but not set');
 }
 
-// Cliente Supabase configurado - only create if we have required variables
-export const supabase = supabaseUrl && supabaseAnonKey ? createClient(
-  supabaseUrl,
-  supabaseAnonKey,
-  {
-    auth: {
-      storage: secureStoreOrLocalStorage,
-      autoRefreshToken: true,
-      persistSession: true,
-      detectSessionInUrl: false,
-    },
-  }
-) : null;
+// Initialize Supabase client with persistent storage
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    storage: AsyncStorage,
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: false,
+  },
+});
 
 // ===================================================================
 // FUNÇÃO DE LOGIN
